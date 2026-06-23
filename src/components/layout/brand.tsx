@@ -7,7 +7,7 @@ export function BrandLogo({ compact = false }: { compact?: boolean }) {
       {/* Plain <img> (not next/image) so it rasterizes cleanly in the shared
           summary card via html-to-image. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/logo.jpeg" alt="veloFIT" className="size-8 shrink-0 rounded-lg object-cover" />
+      <img src="/logo.png" alt="veloFIT" className="size-8 shrink-0 rounded-lg object-cover" />
       {!compact && (
         <span className="text-xl font-extrabold tracking-tight text-foreground">
           velo<span className="text-primary">FIT</span>

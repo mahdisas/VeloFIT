@@ -8,11 +8,11 @@
  *
  * Bump CACHE_VERSION to force old caches out on the next activation.
  */
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const STATIC_CACHE = `velofit-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `velofit-runtime-${CACHE_VERSION}`;
 const OFFLINE_URL = "/offline.html";
-const PRECACHE = [OFFLINE_URL, "/icon-192.jpeg", "/icon-512.jpeg", "/manifest.webmanifest"];
+const PRECACHE = [OFFLINE_URL, "/icon-192.png", "/icon-512.png", "/manifest.webmanifest"];
 
 const ASSET_RE = /\.(?:png|jpg|jpeg|gif|webp|svg|ico|woff2?)$/i;
 
@@ -92,8 +92,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title || "veloFIT", {
       body: data.body,
-      icon: data.icon || "/icon-192.jpeg",
-      badge: "/icon-192.jpeg",
+      icon: data.icon || "/icon-192.png",
+      badge: "/icon-192.png",
       vibrate: [100, 50, 100],
       data: data.data || {},
     })

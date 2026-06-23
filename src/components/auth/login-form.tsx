@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 
@@ -226,12 +225,8 @@ export function LoginForm() {
           )}
         </Button>
       </form>
-
-      <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-sm">
-        <Link href="/privacy" className="text-primary hover:underline">{t("Privacy Policy")}</Link>
-        <Link href="/terms-business" className="text-primary hover:underline">{t("Terms of use for business")}</Link>
-        <Link href="/terms" className="text-primary hover:underline">{t("Terms of use")}</Link>
-      </div>
+      {/* Privacy / Terms links removed for now — those pages don't exist yet
+          (were 404-ing on prefetch). Re-add once the legal pages are built. */}
     </div>
   );
 }
