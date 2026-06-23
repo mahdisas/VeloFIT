@@ -44,9 +44,15 @@ export const getAuthedProfile = cache(async function getAuthedProfile(): Promise
 }> {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // A stale/invalid refresh token makes getUser() reject (400
+  // refresh_token_not_found) — treat as unauthenticated and bounce to /login
+  // rather than letting the throw 500 the page.
+  let user = null;
+  try {
+    user = (await supabase.auth.getUser()).data.user;
+  } catch {
+    user = null;
+  }
   if (!user) redirect("/login");
 
   const { data, error } = await supabase

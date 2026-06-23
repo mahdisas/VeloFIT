@@ -52,9 +52,16 @@ export async function proxy(request: NextRequest) {
 
   // Do not run any logic between createServerClient and getUser() — this call
   // is what refreshes an expired session and writes the rotated cookies.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // A stale/invalid refresh token makes getUser() reject (400
+  // refresh_token_not_found); treat that as "logged out" instead of letting it
+  // throw — an uncaught throw here 500s the request and surfaces on the client
+  // as "An unexpected response was received from the server" (e.g. on sign-out).
+  let user = null;
+  try {
+    user = (await supabase.auth.getUser()).data.user;
+  } catch {
+    user = null;
+  }
 
   const { pathname } = request.nextUrl;
 

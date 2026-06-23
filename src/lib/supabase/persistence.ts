@@ -33,6 +33,10 @@ export function scopeCookie<T extends { maxAge?: number; expires?: unknown }>(
   persist: boolean
 ): T {
   if (persist) return options;
+  // Preserve cookie DELETIONS (maxAge <= 0) so sign-out / token rotation truly
+  // clears the auth cookies. Only a positive lifetime is dropped, turning a
+  // persistent auth cookie into a session cookie.
+  if (typeof options.maxAge === "number" && options.maxAge <= 0) return options;
   const next = { ...options };
   delete next.maxAge;
   delete next.expires;
