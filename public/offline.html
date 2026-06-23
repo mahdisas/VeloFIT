@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Offline · veloFIT</title>
+    <style>
+      :root { color-scheme: light dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f8fafc;
+        color: #0f172a;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Rubik, sans-serif;
+        padding: 24px;
+      }
+      @media (prefers-color-scheme: dark) {
+        body { background: #0b1220; color: #e2e8f0; }
+        .card { background: #111a2e; border-color: #1e293b; }
+        .muted { color: #94a3b8; }
+      }
+      .card {
+        width: 100%;
+        max-width: 380px;
+        text-align: center;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 20px;
+        padding: 40px 28px;
+        box-shadow: 0 10px 30px rgba(2, 6, 23, 0.06);
+      }
+      .tile {
+        width: 64px;
+        height: 64px;
+        margin: 0 auto 20px;
+        border-radius: 16px;
+        background: #3b82f6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      h1 { font-size: 20px; margin: 0 0 8px; font-weight: 800; }
+      p { margin: 0 0 22px; font-size: 14px; line-height: 1.5; }
+      .muted { color: #64748b; }
+      button {
+        appearance: none;
+        border: 0;
+        cursor: pointer;
+        background: #3b82f6;
+        color: #fff;
+        font-weight: 600;
+        font-size: 14px;
+        padding: 10px 20px;
+        border-radius: 10px;
+      }
+      button:hover { background: #2563eb; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="tile" aria-hidden="true">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff"
+             stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+             style="transform: rotate(-45deg)">
+          <path d="M14.4 14.4 9.6 9.6" />
+          <path d="M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z" />
+          <path d="m21.5 21.5-1.4-1.4" />
+          <path d="M3.9 3.9 2.5 2.5" />
+          <path d="M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z" />
+        </svg>
+      </div>
+      <h1>You're offline</h1>
+      <p class="muted">
+        veloFIT can't reach the network right now. Check your connection — your work
+        is safe and will sync once you're back online.
+      </p>
+      <button onclick="location.reload()">Try again</button>
+    </div>
+  </body>
+</html>
