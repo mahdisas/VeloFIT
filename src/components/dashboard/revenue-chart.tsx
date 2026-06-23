@@ -9,6 +9,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { ChartEmptyState } from "@/components/dashboard/chart-empty-state";
 import { ResponsiveChart } from "@/components/dashboard/responsive-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CHART_COLORS, type RevenuePoint } from "@/lib/dashboard";
@@ -22,12 +23,21 @@ const SERIES = [
 /** "Revenue 6 Months" — Receipts vs Invoices as two monthly line series. */
 export function RevenueChart({ data }: { data: RevenuePoint[] }) {
   const t = useT();
+  // With an all-zero gym both lines sit on the baseline and overlap exactly, so
+  // they read as a single flat line — show an explicit empty state instead.
+  const hasData = data.some((d) => d.receipts > 0 || d.invoices > 0);
+
   return (
     <Card className="h-full">
       <CardHeader>
         <CardTitle>{t("Revenue 6 Months")}</CardTitle>
       </CardHeader>
-      <CardContent className="h-80">
+      <CardContent className="flex h-80 flex-col">
+        {!hasData ? (
+          <ChartEmptyState />
+        ) : (
+          <>
+            <div className="min-h-0 flex-1">
         <ResponsiveChart>
           <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: -12 }}>
             <CartesianGrid vertical={false} stroke="var(--border)" />
@@ -65,7 +75,10 @@ export function RevenueChart({ data }: { data: RevenuePoint[] }) {
             ))}
           </LineChart>
         </ResponsiveChart>
-        <ChartLegend />
+            </div>
+            <ChartLegend />
+          </>
+        )}
       </CardContent>
     </Card>
   );

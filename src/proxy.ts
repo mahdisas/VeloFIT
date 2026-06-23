@@ -65,9 +65,10 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Signed-in users never see the login screen or the bare root.
+  // Signed-in users never see the login screen or the bare root — send them to
+  // the gateway (/portal), which lets them pick the Control Panel or mobile App.
   if (user && (pathname === "/login" || pathname === "/")) {
-    return redirectWithSession("/dashboard", request, response);
+    return redirectWithSession("/portal", request, response);
   }
 
   // Signed-out users may only reach public pages.

@@ -10,6 +10,7 @@ import {
   enrollClientInSession,
   getSessionRoster,
   searchEnrollableClients,
+  setEnrollmentNote,
   setEnrollmentStatus,
   toggleAttendance,
   updateSession,
@@ -305,6 +306,23 @@ function DetailBody({
     });
   };
 
+  /** Persist a per-trainee note — optimistic, reverted if the action fails. */
+  const handleSaveNote = (member: RosterMember, note: string) => {
+    const previous = member.note ?? "";
+    if (note === previous) return;
+    setRoster((prev) => prev.map((m) => (m.enrollmentId === member.enrollmentId ? { ...m, note } : m)));
+
+    startTransition(async () => {
+      const result = await setEnrollmentNote(member.enrollmentId, note);
+      if (!result.success) {
+        setRoster((prev) => prev.map((m) => (m.enrollmentId === member.enrollmentId ? { ...m, note: previous } : m)));
+        toast.error(result.message);
+        return;
+      }
+      toast.success(t("Note saved"));
+    });
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <div className="flex flex-col gap-5 p-6">
@@ -358,6 +376,8 @@ function DetailBody({
                   name={m.name}
                   disabled={pending}
                   attended={m.status === "attended"}
+                  note={m.note}
+                  onSaveNote={(n) => handleSaveNote(m, n)}
                   onToggleAttendance={(a) => handleToggleAttendance(m, a)}
                   onRemove={() => handleRemove(m)}
                 />
@@ -372,7 +392,14 @@ function DetailBody({
               <Hint text={t("No waiting trainees.")} />
             ) : (
               waiting.map((m) => (
-                <TraineeItem key={m.enrollmentId} name={m.name} disabled={pending} onApprove={() => handleReinstate(m)} />
+                <TraineeItem
+                  key={m.enrollmentId}
+                  name={m.name}
+                  disabled={pending}
+                  note={m.note}
+                  onSaveNote={(n) => handleSaveNote(m, n)}
+                  onApprove={() => handleReinstate(m)}
+                />
               ))
             )}
           </RosterColumn>
@@ -384,7 +411,14 @@ function DetailBody({
               <Hint text={t("No rejected trainees.")} />
             ) : (
               rejected.map((m) => (
-                <TraineeItem key={m.enrollmentId} name={m.name} disabled={pending} onApprove={() => handleReinstate(m)} />
+                <TraineeItem
+                  key={m.enrollmentId}
+                  name={m.name}
+                  disabled={pending}
+                  note={m.note}
+                  onSaveNote={(n) => handleSaveNote(m, n)}
+                  onApprove={() => handleReinstate(m)}
+                />
               ))
             )}
           </RosterColumn>
@@ -476,7 +510,6 @@ function AddTraineeBox({
         onFocus={() => setOpen(true)}
         placeholder={tr("Add a trainee")}
         className="pe-9"
-        dir="auto"
         disabled={disabled}
       />
       <UserPlus className="pointer-events-none absolute top-1/2 end-3 size-4 -translate-y-1/2 text-primary" />
@@ -563,12 +596,13 @@ function ConfirmDelete({
 
 /**
  * One trainee row. The file icon is a real "Add note" button (not decoration):
- * clicking it opens a small note popup. Note persistence is mocked (toast) —
- * the external enrolment app owns it.
+ * clicking it opens a small note popup that persists to class_enrollments.notes.
  */
 function TraineeItem({
   name,
   attended,
+  note,
+  onSaveNote,
   onToggleAttendance,
   onRemove,
   onApprove,
@@ -576,6 +610,8 @@ function TraineeItem({
 }: {
   name: string;
   attended?: boolean;
+  note?: string;
+  onSaveNote?: (note: string) => void;
   onToggleAttendance?: (attending: boolean) => void;
   onRemove?: () => void;
   onApprove?: () => void;
@@ -594,7 +630,7 @@ function TraineeItem({
         />
       )}
       <span className="min-w-0 flex-1 truncate text-primary" dir="auto">{name}</span>
-      <NoteButton />
+      <NoteButton note={note ?? ""} onSave={onSaveNote} disabled={disabled} />
       {onRemove && (
         <button type="button" aria-label={t("Remove trainee")} onClick={onRemove} disabled={disabled} className="shrink-0 text-destructive disabled:opacity-50">
           <Trash2 className="size-4" />
@@ -609,20 +645,38 @@ function TraineeItem({
   );
 }
 
-/** "Add note" button → a centered "Notes" modal with a textarea + Close/Save. */
-function NoteButton() {
+/** "Add note" button → a centered "Notes" modal with a textarea + Close/Save.
+ *  Persists via onSave (class_enrollments.notes); the popup re-seeds from the
+ *  latest saved note each time it opens. */
+function NoteButton({
+  note,
+  onSave,
+  disabled,
+}: {
+  note: string;
+  onSave?: (note: string) => void;
+  disabled?: boolean;
+}) {
   const t = useT();
   const [open, setOpen] = React.useState(false);
-  const [note, setNote] = React.useState("");
+  const [value, setValue] = React.useState(note);
+  const hasNote = note.trim().length > 0;
 
   return (
     <>
       <button
         type="button"
-        aria-label={t("Add note")}
-        title={t("Add note")}
-        onClick={() => setOpen(true)}
-        className="shrink-0 text-primary transition-colors hover:text-primary/70"
+        aria-label={hasNote ? t("Edit note") : t("Add note")}
+        title={hasNote ? t("Edit note") : t("Add note")}
+        onClick={() => {
+          setValue(note); // re-seed with the latest saved note
+          setOpen(true);
+        }}
+        disabled={disabled}
+        className={cn(
+          "shrink-0 transition-colors hover:text-primary/70 disabled:opacity-50",
+          hasNote ? "text-primary" : "text-muted-foreground"
+        )}
       >
         <FileText className="size-4" />
       </button>
@@ -632,10 +686,16 @@ function NoteButton() {
           <DialogHeader>
             <DialogTitle>{t("Notes")}</DialogTitle>
           </DialogHeader>
-          <Textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} rows={5} dir="auto" />
+          <Textarea autoFocus value={value} onChange={(e) => setValue(e.target.value)} rows={5} dir="auto" />
           <div className="flex justify-end gap-2">
-            <Button type="button" onClick={() => setOpen(false)}>{t("Close")}</Button>
-            <Button type="button" onClick={() => { toast.success(t("Note saved")); setOpen(false); }}>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>{t("Close")}</Button>
+            <Button
+              type="button"
+              onClick={() => {
+                onSave?.(value);
+                setOpen(false);
+              }}
+            >
               {t("Save")} <SendHorizontal className="size-4" />
             </Button>
           </div>

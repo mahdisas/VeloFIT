@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
-/** The app has no public landing page yet — land on the dashboard. */
+/** No public landing page — land on the post-login gateway, which lets the
+ *  user choose the desktop Control Panel or the mobile veloFIT App. */
 export default function RootPage() {
-  redirect("/dashboard");
+  redirect("/portal");
 }

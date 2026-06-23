@@ -2,6 +2,7 @@
 
 import { Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from "recharts";
 
+import { ChartEmptyState } from "@/components/dashboard/chart-empty-state";
 import { ResponsiveChart } from "@/components/dashboard/responsive-chart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type SubscriptionFlowPoint } from "@/lib/dashboard";
@@ -15,6 +16,7 @@ const SERIES = [
 /** "Subscriptions 6 Months" — grouped bars comparing renewals vs expirations. */
 export function SubscriptionsFlowChart({ data }: { data: SubscriptionFlowPoint[] }) {
   const t = useT();
+  const hasData = data.some((d) => d.renewals > 0 || d.expirations > 0);
   return (
     <Card className="h-full">
       <CardHeader>
@@ -26,6 +28,9 @@ export function SubscriptionsFlowChart({ data }: { data: SubscriptionFlowPoint[]
             {t("Classes Subscriptions")}
           </p>
           <div className="h-80 px-2 py-4">
+            {!hasData ? (
+              <ChartEmptyState />
+            ) : (
             <ResponsiveChart>
               <BarChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: -12 }}>
                 <CartesianGrid vertical={false} stroke="var(--border)" />
@@ -63,6 +68,7 @@ export function SubscriptionsFlowChart({ data }: { data: SubscriptionFlowPoint[]
                 ))}
               </BarChart>
             </ResponsiveChart>
+            )}
           </div>
           <div className="flex items-center justify-center gap-6 border-t py-3">
             {SERIES.map((s) => (

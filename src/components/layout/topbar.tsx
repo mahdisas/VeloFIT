@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   ChevronDown,
   Landmark,
+  LayoutGrid,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
@@ -66,7 +67,19 @@ export function Topbar({ gym, collapsed, onToggleSidebar, onOpenMobileNav }: Top
       <ClientSearch />
 
       <div className="ms-auto flex items-center gap-0.5 md:gap-1">
-        <LanguageSwitcher className="hidden text-muted-foreground sm:inline-flex" />
+        {/* Back to the post-login gateway (Control Panel ↔ veloFIT App). */}
+        <Button
+          asChild
+          variant="ghost"
+          size="icon"
+          className="text-muted-foreground"
+        >
+          <Link href="/portal" aria-label={t("Main menu")} title={t("Main menu")}>
+            <LayoutGrid className="size-5" />
+          </Link>
+        </Button>
+
+        <LanguageSwitcher className="text-muted-foreground" />
 
         {/* Profile / business menu */}
         <DropdownMenu>
@@ -104,6 +117,11 @@ export function Topbar({ gym, collapsed, onToggleSidebar, onOpenMobileNav }: Top
             </div>
             <DropdownMenuSeparator className="my-0" />
             <div className="p-1">
+              <DropdownMenuItem asChild>
+                <Link href="/portal" className="cursor-pointer">
+                  <LayoutGrid className="size-4" /> {t("Main menu")}
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/business-details" className="cursor-pointer">
                   <Landmark className="size-4" /> {t("Business details")}

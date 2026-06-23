@@ -7,7 +7,8 @@ import { Topbar } from "@/components/layout/topbar";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { type GymIdentity } from "@/lib/business";
-import { useT } from "@/lib/i18n/provider";
+import { dirFor } from "@/lib/i18n/config";
+import { useLocale, useT } from "@/lib/i18n/provider";
 
 const SIDEBAR_STORAGE_KEY = "velofit:sidebar-collapsed";
 
@@ -18,6 +19,8 @@ const SIDEBAR_STORAGE_KEY = "velofit:sidebar-collapsed";
  */
 export function AppShell({ gym, children }: { gym: GymIdentity; children: React.ReactNode }) {
   const t = useT();
+  // In RTL the sidebar lives on the right, so the mobile drawer slides from there.
+  const isRtl = dirFor(useLocale()) === "rtl";
   const [collapsed, setCollapsed] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
@@ -36,14 +39,15 @@ export function AppShell({ gym, children }: { gym: GymIdentity; children: React.
   return (
     <TooltipProvider delayDuration={300}>
       <div className="flex h-dvh overflow-hidden bg-background">
-        {/* Desktop sidebar */}
-        <div className="hidden border-r md:block">
+        {/* Desktop sidebar (flips to the right in RTL via flex; border-e keeps the
+            divider on the content-facing edge in both directions). */}
+        <div className="hidden border-e md:block">
           <Sidebar gym={gym} collapsed={collapsed} />
         </div>
 
-        {/* Mobile sidebar */}
+        {/* Mobile sidebar — slides from the right in RTL, the left in LTR. */}
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-          <SheetContent side="left" className="w-64 p-0 md:hidden">
+          <SheetContent side={isRtl ? "right" : "left"} className="w-64 p-0 md:hidden">
             <SheetTitle className="sr-only">{t("Navigation")}</SheetTitle>
             <Sidebar gym={gym} onNavigate={() => setMobileOpen(false)} />
           </SheetContent>

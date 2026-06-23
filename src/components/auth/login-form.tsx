@@ -109,14 +109,14 @@ export function LoginForm() {
         return;
       }
 
-      // Remember the tenant hint, then go to the intended page (or the
-      // dashboard). Only same-origin relative paths are honored — no open redirect.
+      // Remember the tenant hint, then go to the intended page (or the gateway
+      // at /portal). Only same-origin relative paths are honored — no open redirect.
       rememberGymCode(gymCode.trim());
       const redirectParam = new URLSearchParams(window.location.search).get("redirect");
       const dest =
         redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")
           ? redirectParam
-          : "/dashboard";
+          : "/portal";
       router.push(dest);
       router.refresh();
     } catch {

@@ -139,25 +139,33 @@ export type RosterMember = {
   clientId: string;
   name: string;
   status: RosterStatus;
+  note?: string; // per-trainee note (class_enrollments.notes)
 };
 
 export type EnrollResult =
   | { success: true; member: RosterMember }
   | { success: false; error: "SESSION_FULL" | "ALREADY_ENROLLED" | "NOT_FOUND" | "ERROR"; message: string };
 
-type RosterRow = { id: string; status: string; client: { id: string; full_name: string } | null };
+type RosterRow = { id: string; status: string; notes: string | null; client: { id: string; full_name: string } | null };
 
 /** The session's roster (newest enrollment last), for the detail dialog. */
 export async function getSessionRoster(sessionId: string): Promise<RosterMember[]> {
   const { supabase, profile } = await getAuthedProfile();
 
-  const { data, error } = await supabase
-    .from("class_enrollments")
-    .select("id, status, client:clients(id, full_name)")
-    .eq("gym_id", profile.gymId)
-    .eq("session_id", sessionId)
-    .order("created_at");
+  const roster = (cols: string) =>
+    supabase
+      .from("class_enrollments")
+      .select(cols)
+      .eq("gym_id", profile.gymId)
+      .eq("session_id", sessionId)
+      .order("created_at");
 
+  // Prefer the note column; fall back if migration 00013 isn't applied yet so a
+  // missing column never breaks the (core) roster — the note just won't load.
+  let { data, error } = await roster("id, status, notes, client:clients(id, full_name)");
+  if (error && /notes/i.test(error.message)) {
+    ({ data, error } = await roster("id, status, client:clients(id, full_name)"));
+  }
   if (error) throw new Error(`Failed to load roster: ${error.message}`);
 
   return ((data ?? []) as unknown as RosterRow[]).map((r) => ({
@@ -165,7 +173,25 @@ export async function getSessionRoster(sessionId: string): Promise<RosterMember[
     clientId: r.client?.id ?? "",
     name: r.client?.full_name ?? "—",
     status: r.status as RosterStatus,
+    note: r.notes ?? "",
   }));
+}
+
+/** Persist a per-trainee note on an enrollment (the roster's "Notes" button). */
+export async function setEnrollmentNote(enrollmentId: string, note: string): Promise<SimpleResult> {
+  const { supabase, profile } = await getAuthedProfile();
+
+  const trimmed = note.trim();
+  const { error } = await supabase
+    .from("class_enrollments")
+    .update({ notes: trimmed || null })
+    .eq("id", enrollmentId)
+    .eq("gym_id", profile.gymId);
+
+  if (error) return { success: false, message: error.message };
+
+  revalidatePath("/classes/calendar");
+  return { success: true };
 }
 
 /** Up to 8 active clients matching `query` — feeds the "Add a trainee" picker. */
