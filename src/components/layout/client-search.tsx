@@ -80,7 +80,10 @@ export function ClientSearch() {
       />
 
       {showPanel && (
-        <div className="absolute top-full right-0 left-0 z-50 mt-1.5 max-h-[26rem] overflow-y-auto rounded-xl border bg-popover p-1.5 shadow-lg">
+        // Mobile: break out to a viewport-width panel below the header so client
+        // names aren't squished by the cramped top bar. Desktop: keep it aligned
+        // to the (roomy) search input.
+        <div className="fixed inset-x-3 top-16 z-50 max-h-[26rem] overflow-y-auto rounded-xl border bg-popover p-1.5 shadow-lg md:absolute md:inset-x-0 md:top-full md:mt-1.5">
           {loading && results.length === 0 ? (
             <div className="flex items-center gap-2 px-3 py-6 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" /> Searching…
