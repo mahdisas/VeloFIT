@@ -52,17 +52,30 @@ export function InvoiceItems({
           <span />
         </div>
         {items.map((it, idx) => (
-          <div key={it.id} className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_5rem_6rem_6rem_2rem] md:items-center">
-            <Input placeholder={t("Type...")} value={it.label} onChange={(e) => updateItem(it.id, { label: e.target.value })} />
-            <Input type="number" min={0} value={it.qty} onChange={(e) => updateItem(it.id, { qty: Number(e.target.value) || 0 })} />
-            <Input type="number" min={0} value={it.unitPrice} onChange={(e) => updateItem(it.id, { unitPrice: Number(e.target.value) || 0 })} />
-            <Input value={(it.qty * it.unitPrice).toFixed(0)} readOnly className="bg-muted/50" />
+          <div
+            key={it.id}
+            className="grid grid-cols-1 gap-x-3 gap-y-2 rounded-lg border p-3 md:grid-cols-[1fr_5rem_6rem_6rem_2rem] md:items-center md:gap-y-3 md:rounded-none md:border-0 md:p-0"
+          >
+            {/* The header row is md-only, so each field carries its own label on
+                small screens (md:contents keeps the desktop grid identical). */}
+            <Field label={`${t("Items")} *`}>
+              <Input placeholder={t("Type...")} value={it.label} onChange={(e) => updateItem(it.id, { label: e.target.value })} />
+            </Field>
+            <Field label={`${t("Quantity")} *`}>
+              <Input type="number" min={0} value={it.qty} onChange={(e) => updateItem(it.id, { qty: Number(e.target.value) || 0 })} />
+            </Field>
+            <Field label={`${t("Unit price")} *`}>
+              <Input type="number" min={0} value={it.unitPrice} onChange={(e) => updateItem(it.id, { unitPrice: Number(e.target.value) || 0 })} />
+            </Field>
+            <Field label={t("Total")}>
+              <Input value={(it.qty * it.unitPrice).toFixed(0)} readOnly className="bg-muted/50" />
+            </Field>
             {idx === items.length - 1 ? (
-              <Button type="button" variant="ghost" size="icon" className="text-primary" aria-label={t("Add item")} onClick={addItem}>
+              <Button type="button" variant="ghost" size="icon" className="justify-self-start text-primary md:justify-self-auto" aria-label={t("Add item")} onClick={addItem}>
                 <CirclePlus className="size-5" />
               </Button>
             ) : (
-              <span />
+              <span className="hidden md:block" />
             )}
           </div>
         ))}
@@ -75,5 +88,19 @@ export function InvoiceItems({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * One line-item field. On phones it stacks a label over its input; on md+ the
+ * wrapper collapses (display: contents) so the input drops straight into the
+ * shared grid and the (md-only) column header provides the title instead.
+ */
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1 md:contents">
+      <span className="text-xs font-medium text-[#595959] md:hidden">{label}</span>
+      {children}
+    </label>
   );
 }
