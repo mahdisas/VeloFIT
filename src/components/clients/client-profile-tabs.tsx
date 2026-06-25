@@ -220,11 +220,11 @@ function AccountingTab({ rows: serverRows, clientId }: { rows: AccountingDocumen
   React.useEffect(() => setRows(serverRows), [serverRows]);
 
   const columns: Column<AccountingDocument>[] = [
-    { key: "date", header: tr("Date"), sortable: true, cell: (r) => fmtDate(r.date) },
-    { key: "no", header: tr("Invoice No."), sortable: true, cell: (r) => r.invoiceNo },
-    { key: "type", header: tr("Invoice Type"), sortable: true, cell: (r) => <span className="text-amber-600">{tr(r.type)}</span> },
-    { key: "vat", header: tr("VAT"), sortable: true, cell: (r) => money(r.vat) },
-    { key: "amount", header: tr("Amount"), sortable: true, cell: (r) => money(r.amount) },
+    { key: "date", header: tr("Date"), sortValue: (r) => r.date, cell: (r) => fmtDate(r.date) },
+    { key: "no", header: tr("Invoice No."), sortValue: (r) => r.invoiceNo, cell: (r) => r.invoiceNo },
+    { key: "type", header: tr("Invoice Type"), sortValue: (r) => tr(r.type), cell: (r) => <span className="text-amber-600">{tr(r.type)}</span> },
+    { key: "vat", header: tr("VAT"), sortValue: (r) => r.vat, cell: (r) => money(r.vat) },
+    { key: "amount", header: tr("Amount"), sortValue: (r) => r.amount, cell: (r) => money(r.amount) },
   ];
 
   const typeLabel = INVOICE_TYPES.find((t) => t.value === docType)?.label ?? "";
@@ -234,6 +234,7 @@ function AccountingTab({ rows: serverRows, clientId }: { rows: AccountingDocumen
       <ProfileTablePanel
         rows={rows}
         columns={columns}
+        defaultSort={{ key: "date", dir: "desc" }}
         toolbar={
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

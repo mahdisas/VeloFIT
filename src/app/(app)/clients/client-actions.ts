@@ -167,9 +167,10 @@ export async function archiveClient(id: string): Promise<ActionResult> {
  * started, else the next upcoming one); if the gym has no class today, it falls
  * back to the gym's most recent past class — so the entry always attaches to a
  * class. The client is marked *attended* in that class, and the entrance is
- * stamped at the **actual entry time (now)** so the profile's "Last Entrance"
- * shows when the client really came in. Also feeds the dashboard's
- * "Today Entrances".
+ * stamped at that class's **scheduled time** (date + start_time), NOT the moment
+ * the button was clicked — staff often log attendance after the class ends — so
+ * "Last Entrance" reflects the class. Only with no class at all does it use now.
+ * Also feeds the dashboard's "Today Entrances".
  */
 export async function registerEntrance(clientId: string): Promise<ActionResult> {
   const { supabase, profile } = await getAuthedProfile();
@@ -183,15 +184,15 @@ export async function registerEntrance(clientId: string): Promise<ActionResult> 
   // Today's live sessions, earliest first.
   const { data: sessions } = await supabase
     .from("class_sessions")
-    .select("id, start_time")
+    .select("id, session_date, start_time")
     .eq("gym_id", gymId)
     .eq("session_date", today)
     .neq("status", "canceled")
     .order("start_time", { ascending: true });
 
   // Pick the most recent class that has started; otherwise the next one up.
-  let target: { id: string; start_time: string } | null = null;
-  const list = (sessions ?? []) as { id: string; start_time: string }[];
+  let target: { id: string; session_date: string; start_time: string } | null = null;
+  const list = (sessions ?? []) as { id: string; session_date: string; start_time: string }[];
   if (list.length) {
     const started = list.filter((s) => s.start_time <= nowTime);
     target = started.length ? started[started.length - 1] : list[0];
@@ -201,20 +202,28 @@ export async function registerEntrance(clientId: string): Promise<ActionResult> 
   if (!target) {
     const { data: past } = await supabase
       .from("class_sessions")
-      .select("id, start_time")
+      .select("id, session_date, start_time")
       .eq("gym_id", gymId)
       .lt("session_date", today)
       .neq("status", "canceled")
       .order("session_date", { ascending: false })
       .order("start_time", { ascending: false })
       .limit(1);
-    target = ((past ?? [])[0] as { id: string; start_time: string } | undefined) ?? null;
+    target = ((past ?? [])[0] as { id: string; session_date: string; start_time: string } | undefined) ?? null;
   }
 
   const sessionId = target?.id ?? null;
-  // Stamp at the actual entry time (now) so "Last Entrance" shows when the
-  // client really came in, not the class's scheduled start time.
-  const checkedInAt = now.toISOString();
+  // Stamp at the class's SCHEDULED time (date + start_time), NOT the moment the
+  // button was clicked — staff often log attendance well after the class ends.
+  // Only fall back to "now" when there's no class to attach the entrance to.
+  let checkedInAt: string;
+  if (target) {
+    const [y, m, d] = target.session_date.split("-").map(Number);
+    const [hh, mm, ss] = target.start_time.split(":").map(Number);
+    checkedInAt = new Date(y, m - 1, d, hh, mm, ss || 0).toISOString();
+  } else {
+    checkedInAt = now.toISOString();
+  }
 
   // Add the client to that class as attended (upsert; capacity-full is non-fatal —
   // they physically showed up, so we still log the entrance).
