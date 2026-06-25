@@ -48,8 +48,21 @@ export async function listTrainerOptions(supabase: ServerSupabase, gymId: string
     .filter((s) => !byProfile.has(s.id))
     .map((s) => ({ gym_id: gymId, profile_id: s.id, full_name: s.full_name, is_active: true }));
   if (toCreate.length > 0) {
-    const { data: created } = await supabase.from("trainers").insert(toCreate).select("id, profile_id");
-    for (const t of (created ?? []) as { id: string; profile_id: string }[]) byProfile.set(t.profile_id, t.id);
+    // Idempotent + race-proof: the unique (gym_id, profile_id) index (migration
+    // 00014) turns a concurrent bridge into a no-op (ON CONFLICT DO NOTHING)
+    // instead of inserting a duplicate trainer row. ignoreDuplicates means the
+    // conflicting rows aren't returned, so we re-read to resolve every id —
+    // whether this request created it or a parallel one did.
+    await supabase
+      .from("trainers")
+      .upsert(toCreate, { onConflict: "gym_id,profile_id", ignoreDuplicates: true });
+
+    const { data: nowLinked } = await supabase
+      .from("trainers")
+      .select("id, profile_id")
+      .eq("gym_id", gymId)
+      .in("profile_id", toCreate.map((t) => t.profile_id));
+    for (const t of (nowLinked ?? []) as { id: string; profile_id: string }[]) byProfile.set(t.profile_id, t.id);
   }
 
   return staff

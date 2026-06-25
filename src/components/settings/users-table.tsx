@@ -79,9 +79,15 @@ export function UsersTable({ users: initial }: { users: StaffUser[] }) {
     toast.success(exists ? t("User updated") : t("User added"));
   };
 
-  const onDelete = (id: string) => {
-    setUsers((prev) => prev.filter((u) => u.id !== id));
-    void deleteUser(id);
+  const onDelete = async (id: string) => {
+    const snapshot = users; // to restore if the archive doesn't actually persist
+    setUsers((prev) => prev.filter((u) => u.id !== id)); // optimistic
+    const result = await deleteUser(id);
+    if (!result.ok) {
+      setUsers(snapshot); // server refused (e.g. your own account) — put the row back
+      toast.error(result.error);
+      return;
+    }
     toast.success(t("User archived"));
   };
 

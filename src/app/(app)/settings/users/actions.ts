@@ -80,21 +80,48 @@ export async function saveUser(input: UserInput): Promise<ActionResult> {
     permissions: v.permissions,
   };
 
-  // ── Edit: profile update only (no auth changes) ────────────────────────────
+  // ── Edit: profile update, then sync the login email + trainers roster ───────
   if (v.id) {
+    // Need the current username to know whether the login email must change.
+    const { data: existing } = await supabase
+      .from("profiles").select("username").eq("id", v.id).eq("gym_id", profile.gymId).maybeSingle();
+    if (!existing) return { ok: false, error: "User not found in this gym." };
+
     const { error } = await supabase.from("profiles").update(fields).eq("id", v.id).eq("gym_id", profile.gymId);
     if (error) return { ok: false, error: error.code === "23505" ? DUP : error.message };
+
+    const admin = createAdminClient();
+
+    // Issue 1 — a changed username must re-point the synthesized login email,
+    // otherwise the person still signs in with their OLD username. The profile
+    // update above already enforced username uniqueness (so the new email is
+    // unique too); update it only when it actually changed.
+    const oldUsername = (existing.username ?? "").trim().toLowerCase();
+    const newUsername = v.username.trim().toLowerCase();
+    if (newUsername !== oldUsername) {
+      const slug = await gymSlug(supabase, profile.gymId);
+      const { error: emailError } = await admin.auth.admin.updateUserById(v.id, {
+        email: `${newUsername}@${slug}.${STAFF_EMAIL_DOMAIN}`,
+        email_confirm: true,
+      });
+      if (emailError) {
+        return { ok: false, error: `Saved, but the login username couldn't be updated: ${emailError.message}` };
+      }
+    }
+
+    // Issues 2 & 3 — keep the assignable-trainers roster in sync (name + membership).
+    await syncTrainerRoster(admin, profile.gymId, v.id, fullName, v.permissions.trainer);
+
     revalidatePath("/settings/users");
     return { ok: true, id: v.id };
   }
 
-  // ── Create: provision an auth account, then the profile row ─────────────────
+  // ── Create: provision an auth account, the profile row, then the trainer ────
   if (!v.password || v.password.length < 6) {
     return { ok: false, error: "Password must be at least 6 characters." };
   }
 
-  const { data: gym } = await supabase.from("gyms").select("slug").eq("id", profile.gymId).single();
-  const slug = (gym?.slug as string | undefined) ?? profile.gymId;
+  const slug = await gymSlug(supabase, profile.gymId);
   const email = `${v.username.trim().toLowerCase()}@${slug}.${STAFF_EMAIL_DOMAIN}`;
 
   const admin = createAdminClient();
@@ -118,8 +145,49 @@ export async function saveUser(input: UserInput): Promise<ActionResult> {
     return { ok: false, error: profileError.code === "23505" ? DUP : profileError.message };
   }
 
+  // Issue 3 — add the new staff to the trainers roster if they're a Trainer.
+  await syncTrainerRoster(admin, profile.gymId, userId, fullName, v.permissions.trainer);
+
   revalidatePath("/settings/users");
   return { ok: true, id: userId };
+}
+
+type AdminClient = ReturnType<typeof createAdminClient>;
+type ServerClient = Awaited<ReturnType<typeof getAuthedProfile>>["supabase"];
+
+/** The gym's slug (for the synthesized login email); falls back to the gym id. */
+async function gymSlug(supabase: ServerClient, gymId: string): Promise<string> {
+  const { data } = await supabase.from("gyms").select("slug").eq("id", gymId).single();
+  return (data?.slug as string | undefined) ?? gymId;
+}
+
+/**
+ * Keep the assignable-trainers roster in sync with a staff profile:
+ *   • Issue 2 — refresh the trainer's name (no-op if they have no trainer row).
+ *   • Issue 3 — ensure a trainer row exists when they hold the Trainer permission.
+ * Best-effort: a hiccup here never fails the user save. The upsert relies on the
+ * unique index on trainers(gym_id, profile_id) (migration 00014).
+ */
+async function syncTrainerRoster(
+  admin: AdminClient,
+  gymId: string,
+  profileId: string,
+  fullName: string,
+  isTrainer: boolean
+): Promise<void> {
+  // Issue 2: refresh the name on an existing trainer row (matches by profile_id).
+  await admin.from("trainers").update({ full_name: fullName }).eq("gym_id", gymId).eq("profile_id", profileId);
+
+  // Issue 3: ensure roster membership; ON CONFLICT DO NOTHING (the update above
+  // already handled the name) makes it idempotent and race-proof.
+  if (isTrainer) {
+    await admin
+      .from("trainers")
+      .upsert(
+        { gym_id: gymId, profile_id: profileId, full_name: fullName, is_active: true },
+        { onConflict: "gym_id,profile_id", ignoreDuplicates: true }
+      );
+  }
 }
 
 /** Soft-archive → Archive · Users. The auth account is kept for history. */
