@@ -60,7 +60,8 @@ type SubRow = {
   start_date: string;
   end_date: string;
   status: string;
-  plan: { period_months: number; group: { name: string } | null } | null;
+  classes_used: number | null;
+  plan: { period_months: number; is_class_plan: boolean; classes_limit: number | null; group: { name: string } | null } | null;
 };
 type SubTableRow = {
   id: string;
@@ -91,7 +92,7 @@ export async function getDashboardData(): Promise<DashboardData> {
   const [subsRes, attendRes, docsRes, paymentsRes, expiringRes, recentRes] = await Promise.all([
     supabase
       .from("subscriptions")
-      .select("start_date, end_date, status, plan:subscription_plans(period_months, group:class_groups(name))")
+      .select("start_date, end_date, status, classes_used, plan:subscription_plans(period_months, is_class_plan, classes_limit, group:class_groups(name))")
       .eq("gym_id", gymId),
     supabase
       .from("attendances")
@@ -125,7 +126,13 @@ export async function getDashboardData(): Promise<DashboardData> {
   }
 
   const subs = (subsRes.data ?? []) as unknown as SubRow[];
-  const activeSubs = subs.filter((s) => s.status === "active" && s.end_date >= today);
+  // A used-up class pass (punch card) is "completed" — exclude it from the active
+  // count, matching the client-profile rule (see getClientSubscriptions).
+  const classPassDone = (s: SubRow) =>
+    (s.plan?.is_class_plan ?? false) &&
+    s.plan?.classes_limit != null &&
+    Number(s.classes_used ?? 0) >= s.plan.classes_limit;
+  const activeSubs = subs.filter((s) => s.status === "active" && s.end_date >= today && !classPassDone(s));
 
   // ── Attendances → today's count + 14-day sparkline ──────────────────────────
   const attendByDay = new Map<string, number>();

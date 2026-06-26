@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { getAuthedProfile } from "@/lib/dal";
 import { getCalendarSessions } from "@/lib/classes-server";
+import { consumeClassPass } from "@/lib/class-pass-server";
 import { type CalendarSessionMap } from "@/lib/calendar";
 
 /**
@@ -360,14 +361,19 @@ export async function toggleAttendance(enrollmentId: string, isAttending: boolea
       await supabase
         .from("attendances")
         .insert({ gym_id: gymId, client_id, session_id, checked_in_at: checkedInAt });
+      // Punch card: a newly-attended class consumes one credit on an active pass.
+      await consumeClassPass(supabase, gymId, client_id, +1);
     }
   } else {
-    await supabase
+    const { data: removed } = await supabase
       .from("attendances")
       .delete()
       .eq("gym_id", gymId)
       .eq("session_id", session_id)
-      .eq("client_id", client_id);
+      .eq("client_id", client_id)
+      .select("id");
+    // Un-marking an attended class refunds the class-pass credit it consumed.
+    if (removed && removed.length > 0) await consumeClassPass(supabase, gymId, client_id, -1);
   }
 
   revalidatePath("/classes/calendar");

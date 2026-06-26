@@ -15,6 +15,8 @@ type PlanRow = {
   is_trial_lesson: boolean;
   show_in_app: boolean;
   description: string | null;
+  is_class_plan: boolean;
+  classes_limit: number | null;
   is_active: boolean;
   group: { name: string } | null;
 };
@@ -29,7 +31,7 @@ export async function getPackages(): Promise<SubscriptionPackage[]> {
   const { data, error } = await supabase
     .from("subscription_plans")
     .select(
-      "id, name, color, group_id, price, max_purchases, period_months, max_payments, is_trial_lesson, show_in_app, description, is_active, group:class_groups(name)"
+      "id, name, color, group_id, price, max_purchases, period_months, max_payments, is_trial_lesson, show_in_app, description, is_class_plan, classes_limit, is_active, group:class_groups(name)"
     )
     .eq("gym_id", profile.gymId)
     .order("created_at", { ascending: false });
@@ -49,6 +51,8 @@ export async function getPackages(): Promise<SubscriptionPackage[]> {
     isTrialLesson: p.is_trial_lesson,
     showInApp: p.show_in_app,
     description: p.description ?? "",
+    isClassPlan: p.is_class_plan,
+    classesLimit: p.classes_limit,
     isActive: p.is_active,
   }));
 }

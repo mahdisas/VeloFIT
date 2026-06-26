@@ -39,6 +39,8 @@ type FormValues = {
   showInApp: boolean;
   description: string;
   groupId: string;
+  isClassPlan: boolean;
+  classesLimit: string;
 };
 
 function seed(pkg?: SubscriptionPackage): FormValues {
@@ -53,6 +55,8 @@ function seed(pkg?: SubscriptionPackage): FormValues {
     showInApp: pkg?.showInApp ?? true,
     description: pkg?.description ?? "",
     groupId: pkg?.groupId ?? "",
+    isClassPlan: pkg?.isClassPlan ?? false,
+    classesLimit: pkg?.classesLimit != null ? String(pkg.classesLimit) : "",
   };
 }
 
@@ -95,6 +99,11 @@ export function PackageDialog({
       setError(t("Name is required."));
       return;
     }
+    const classesLimit = form.isClassPlan && Number(form.classesLimit) >= 1 ? Number(form.classesLimit) : null;
+    if (form.isClassPlan && classesLimit == null) {
+      setError(t("A class pass needs a classes limit of at least 1."));
+      return;
+    }
     startTransition(async () => {
       const result = await savePackage({
         id: pkg?.id,
@@ -108,6 +117,8 @@ export function PackageDialog({
         isTrialLesson: form.isTrialLesson,
         showInApp: form.showInApp,
         description: form.description,
+        isClassPlan: form.isClassPlan,
+        classesLimit,
       });
       if (!result.ok) {
         setError(result.error);
@@ -126,6 +137,8 @@ export function PackageDialog({
         isTrialLesson: form.isTrialLesson,
         showInApp: form.showInApp,
         description: form.description,
+        isClassPlan: form.isClassPlan,
+        classesLimit,
         isActive: pkg?.isActive ?? true,
       });
       setOpen(false);
@@ -166,6 +179,22 @@ export function PackageDialog({
                   <Input type="number" min={1} value={form.periodMonths} onChange={(e) => set("periodMonths", e.target.value)} placeholder={t("Months")} />
                 </div>
               </Field>
+            </div>
+
+            {/* Class pass / punch card (כרטיסייה): charge per N classes, not monthly. */}
+            <div className="flex flex-col gap-3 rounded-lg border p-4">
+              <label className="flex items-center justify-between gap-3">
+                <span className="flex flex-col">
+                  <span className="text-sm font-medium text-[#595959]">{t("Class pass / punch card")}</span>
+                  <span className="text-xs text-muted-foreground">{t("Charge per a set number of classes instead of monthly.")}</span>
+                </span>
+                <Switch checked={form.isClassPlan} onCheckedChange={(v) => set("isClassPlan", v)} />
+              </label>
+              {form.isClassPlan && (
+                <Field label={t("Number of classes")}>
+                  <Input type="number" min={1} value={form.classesLimit} onChange={(e) => set("classesLimit", e.target.value)} placeholder={t("e.g. 12")} />
+                </Field>
+              )}
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

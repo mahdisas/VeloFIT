@@ -490,6 +490,7 @@ export const he: Dictionary = {
   "This occurrence will be canceled and removed from the calendar. Its roster is kept for history.":
     "המופע הזה יבוטל ויוסר מהיומן. רשימת המתאמנים נשמרת להיסטוריה.",
   "Cancel session": "בטל מפגש",
+  "Cancel class": "בטל שיעור",
   "Delete All Classes": "מחק את כל השיעורים",
   "Stand down the whole class?": "להפסיק את כל השיעור?",
   "The class is deactivated and every upcoming session is canceled. Past sessions and their attendance are kept.":
@@ -1069,4 +1070,39 @@ export const he: Dictionary = {
   Approve: "אישור",
   "Approve {name}": "אשר את {name}",
   "No data for this period yet": "אין נתונים לתקופה זו עדיין",
+
+  // ── Accounting: log payment ──────────────────────────────────────────────
+  Paid: "שולם",
+  "Log Payment": "רישום תשלום",
+  "Payment method": "אמצעי תשלום",
+  "Payment logged": "התשלום נרשם",
+  "Credit card": "כרטיס אשראי",
+  Cheque: "צ׳ק",
+  "Bank transfer": "העברה בנקאית",
+  Reference: "אסמכתא",
+  Optional: "אופציונלי",
+  "Amount must be greater than 0.": "הסכום חייב להיות גדול מ-0.",
+  "Records a receipt against document #{no} — no new invoice is created.":
+    "רושם קבלה על מסמך מס׳ {no} — ללא יצירת חשבונית חדשה.",
+  "Account Number / Transaction ID": "מספר חשבון / מזהה עסקה",
+  "Direct debit": "הוראת קבע",
+
+  // ── Accounting: document details ─────────────────────────────────────────
+  "View details": "צפייה בפרטים",
+  "Document details": "פרטי מסמך",
+  Client: "לקוח",
+  Subtotal: "סכום ביניים",
+  "Payment history": "היסטוריית תשלומים",
+  "No payments recorded yet.": "לא נרשמו תשלומים עדיין.",
+
+  // ── Class pass / punch card ──────────────────────────────────────────────
+  "Class pass / punch card": "כרטיסייה",
+  "Charge per a set number of classes instead of monthly.": "חיוב לפי מספר שיעורים קבוע במקום חודשי.",
+  "Number of classes": "מספר שיעורים",
+  "e.g. 12": "לדוגמה: 12",
+  "A class pass needs a classes limit of at least 1.": "כרטיסייה דורשת מכסת שיעורים של 1 לפחות.",
+  "Limit reached — renewal due": "המכסה נוצלה — נדרש חידוש",
+  "No Expiration": "ללא תפוגה",
+  "No expiration (punch card)": "ללא תפוגה (כרטיסייה)",
+  "For a new punch-card subscription from date {from}": "לכרטיסייה חדשה מתאריך {from}",
 };

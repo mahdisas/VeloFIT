@@ -155,9 +155,24 @@ export type ClientSubscription = {
   cost: number; // price_paid
   notes: string;
   limits: SubscriptionLimits;
+  // Class pass / punch card tracking (null/0 unless the plan is a class pass).
+  isClassPlan: boolean;
+  classesLimit: number | null;
+  classesUsed: number;
 };
 
 // getClientSubscriptions() is now a real query — see lib/clients-server.ts.
+
+/**
+ * Class passes (כרטיסייה) can be endless on time — "punch until used up". The DB
+ * `subscriptions.end_date` is NOT NULL, so a no-expiry pass stores a far-future
+ * sentinel instead; the UI shows "No Expiration" and effective_status never reads
+ * it as date-expired. Detection is "year ≥ 9000" so it survives reformatting.
+ */
+export const NO_EXPIRY_DATE = "9999-12-31";
+export function isNoExpiry(iso: string | null | undefined): boolean {
+  return !!iso && iso >= "9000-01-01";
+}
 
 /**
  * One purchasable plan for the New-Subscription "Group" picker. A subscription
@@ -171,6 +186,9 @@ export type SubscriptionPlanOption = {
   planName: string;
   price: number;
   periodMonths: number;
+  // Class pass / punch card: a class plan defaults to no expiry on purchase.
+  isClassPlan: boolean;
+  classesLimit: number | null;
 };
 
 export type AccountingInvoiceType =
@@ -192,13 +210,19 @@ export const INVOICE_TYPES: { value: AccountingInvoiceType; label: string }[] = 
   { value: "non_formal_transaction", label: "Non Formal Transaction" },
 ];
 
+/** DB doc_type values that represent a billable charge — they count toward the
+ *  client balance and can receive a "Log Payment" (Receipt) against them. */
+export const INVOICE_DOC_TYPES = ["tax_invoice", "receipt_tax_invoice", "receipt", "informal"];
+
 export type AccountingDocument = {
   id: string;
   date: string; // ISO
   invoiceNo: string;
-  type: string;
+  docType: string; // raw DB doc_type enum (for charge / payable checks)
+  type: string; // translated display label
   vat: number; // VAT portion of the amount (0 for non-VAT document types)
   amount: number; // gross total (VAT-inclusive)
+  paid: number; // Σ payments linked to this document (payments.document_id)
 };
 
 // getClientAccounting() is now a real query — see lib/clients-server.ts.

@@ -54,9 +54,10 @@ export function ClientsTable({ clients }: { clients: ClientListRow[] }) {
   const t = useT();
   const router = useRouter();
   const [query, setQuery] = React.useState("");
+  // Default to newest-added first (highest client number on top) — like a stack.
   const [sort, setSort] = React.useState<{ key: SortKey; dir: "asc" | "desc" }>({
     key: "number",
-    dir: "asc",
+    dir: "desc",
   });
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);

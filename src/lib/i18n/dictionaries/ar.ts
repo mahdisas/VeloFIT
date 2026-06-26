@@ -490,6 +490,7 @@ export const ar: Dictionary = {
   "This occurrence will be canceled and removed from the calendar. Its roster is kept for history.":
     "سيتم إلغاء هذه المرة وإزالتها من التقويم. تُحفظ قائمتها للسجل.",
   "Cancel session": "إلغاء الجلسة",
+  "Cancel class": "إلغاء الحصة",
   "Delete All Classes": "حذف كل الحصص",
   "Stand down the whole class?": "إيقاف الحصة بالكامل؟",
   "The class is deactivated and every upcoming session is canceled. Past sessions and their attendance are kept.":
@@ -1069,4 +1070,39 @@ export const ar: Dictionary = {
   Approve: "موافقة",
   "Approve {name}": "الموافقة على {name}",
   "No data for this period yet": "لا توجد بيانات لهذه الفترة بعد",
+
+  // ── Accounting: log payment ──────────────────────────────────────────────
+  Paid: "المدفوع",
+  "Log Payment": "تسجيل دفعة",
+  "Payment method": "طريقة الدفع",
+  "Payment logged": "تم تسجيل الدفعة",
+  "Credit card": "بطاقة ائتمان",
+  Cheque: "شيك",
+  "Bank transfer": "تحويل بنكي",
+  Reference: "مرجع",
+  Optional: "اختياري",
+  "Amount must be greater than 0.": "يجب أن يكون المبلغ أكبر من 0.",
+  "Records a receipt against document #{no} — no new invoice is created.":
+    "يسجّل إيصالًا على المستند رقم {no} — دون إنشاء فاتورة جديدة.",
+  "Account Number / Transaction ID": "رقم الحساب / معرّف العملية",
+  "Direct debit": "اقتطاع مباشر",
+
+  // ── Accounting: document details ─────────────────────────────────────────
+  "View details": "عرض التفاصيل",
+  "Document details": "تفاصيل المستند",
+  Client: "العميل",
+  Subtotal: "المجموع الفرعي",
+  "Payment history": "سجل المدفوعات",
+  "No payments recorded yet.": "لا توجد مدفوعات مسجلة بعد.",
+
+  // ── Class pass / punch card ──────────────────────────────────────────────
+  "Class pass / punch card": "بطاقة حصص / كرتيسية",
+  "Charge per a set number of classes instead of monthly.": "احتساب لكل عدد محدد من الحصص بدلاً من اشتراك شهري.",
+  "Number of classes": "عدد الحصص",
+  "e.g. 12": "مثال: 12",
+  "A class pass needs a classes limit of at least 1.": "تحتاج بطاقة الحصص إلى حد لا يقل عن حصة واحدة.",
+  "Limit reached — renewal due": "تم بلوغ الحد — التجديد مستحق",
+  "No Expiration": "بدون انتهاء",
+  "No expiration (punch card)": "بدون انتهاء (بطاقة حصص)",
+  "For a new punch-card subscription from date {from}": "لبطاقة حصص جديدة من تاريخ {from}",
 };

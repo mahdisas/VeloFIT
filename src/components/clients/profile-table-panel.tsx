@@ -41,6 +41,7 @@ export function ProfileTablePanel<T extends { id: string }>({
   emptyText,
   maxBodyHeight,
   defaultSort,
+  onRowClick,
 }: {
   toolbar?: React.ReactNode;
   columns: Column<T>[];
@@ -50,6 +51,9 @@ export function ProfileTablePanel<T extends { id: string }>({
   maxBodyHeight?: number;
   /** Initial sort, e.g. newest-first: `{ key: "date", dir: "desc" }`. */
   defaultSort?: { key: string; dir: SortDir };
+  /** Makes each row clickable (e.g. open a details view). Buttons inside a row
+   *  should stopPropagation so they don't also fire this. */
+  onRowClick?: (row: T) => void;
 }) {
   const t = useT();
   const [page, setPage] = React.useState(1);
@@ -133,7 +137,11 @@ export function ProfileTablePanel<T extends { id: string }>({
               </TableRow>
             ) : (
               paged.map((row) => (
-                <TableRow key={row.id}>
+                <TableRow
+                  key={row.id}
+                  className={cn(onRowClick && "cursor-pointer")}
+                  onClick={onRowClick ? () => onRowClick(row) : undefined}
+                >
                   {columns.map((col) => (
                     <TableCell key={col.key} className={cn(col.className)}>
                       {col.cell(row)}

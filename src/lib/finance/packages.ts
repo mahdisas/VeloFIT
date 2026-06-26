@@ -24,6 +24,10 @@ export type SubscriptionPackage = {
   isTrialLesson: boolean;
   showInApp: boolean;
   description: string;
+  /** "Class pass / punch card" (כרטיסייה): consumed per class instead of per month. */
+  isClassPlan: boolean;
+  /** Number of classes the pass grants (null unless isClassPlan). */
+  classesLimit: number | null;
   isActive: boolean;
 };
 

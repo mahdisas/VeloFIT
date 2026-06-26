@@ -31,6 +31,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import {
   INVOICE_TYPES,
+  NO_EXPIRY_DATE,
+  isNoExpiry,
   type ClientSubscription,
   type SubscriptionPlanOption,
 } from "@/lib/clients";
@@ -62,6 +64,7 @@ type FormState = {
   fromDate: string;
   period: string;
   toDate: string;
+  noExpiry: boolean; // class pass with no end date (toDate = NO_EXPIRY_DATE)
   cost: string;
   document: string;
   cancellationBalance: string;
@@ -78,11 +81,15 @@ function initialState(
   sub?: ClientSubscription
 ): FormState {
   const firstPlan = planOptions[0];
+  // Editing reflects what's stored; a brand-new class pass defaults to no expiry.
+  const isClassPlan = sub ? sub.isClassPlan : (firstPlan?.isClassPlan ?? false);
+  const noExpiry = isClassPlan && (sub ? isNoExpiry(sub.toDate) : true);
   return {
     planId: sub?.planId ?? firstPlan?.id ?? "",
     fromDate: sub?.fromDate ?? today(),
     period: "1m",
-    toDate: sub?.toDate ?? addMonths(today(), firstPlan?.periodMonths ?? 1),
+    toDate: noExpiry ? NO_EXPIRY_DATE : (sub?.toDate ?? addMonths(today(), firstPlan?.periodMonths ?? 1)),
+    noExpiry,
     cost: sub ? String(sub.cost) : String(firstPlan?.price ?? 0),
     document: "receipt_tax_invoice",
     cancellationBalance: sub ? String(sub.limits.cancellationBalance) : "0",
@@ -133,28 +140,49 @@ export function SubscriptionDialog({
     setForm((prev) => ({ ...prev, [key]: value }));
 
   // Picking a package prefills cost + end date from the plan's price/length.
+  // A class pass defaults to no expiry (endless punch card) on selection.
   const setPlan = (planId: string) => {
     const plan = planOptions.find((p) => p.id === planId);
+    const noExpiry = plan?.isClassPlan ?? false;
     setForm((prev) => ({
       ...prev,
       planId,
       cost: plan ? String(plan.price) : prev.cost,
       period: plan ? periodFromMonths(plan.periodMonths) : prev.period,
-      toDate: plan ? addMonths(prev.fromDate, plan.periodMonths) : prev.toDate,
+      noExpiry,
+      toDate: noExpiry
+        ? NO_EXPIRY_DATE
+        : plan
+          ? addMonths(prev.fromDate, plan.periodMonths)
+          : prev.toDate,
     }));
   };
 
-  // Auto-compute the end date from start date + period.
+  // Auto-compute the end date from start date + period (skipped when no expiry).
   const setFrom = (fromDate: string) => {
-    const months = PERIODS.find((p) => p.value === form.period)?.months ?? 1;
-    setForm((prev) => ({ ...prev, fromDate, toDate: addMonths(fromDate, months) }));
+    setForm((prev) => {
+      if (prev.noExpiry) return { ...prev, fromDate };
+      const months = PERIODS.find((p) => p.value === prev.period)?.months ?? 1;
+      return { ...prev, fromDate, toDate: addMonths(fromDate, months) };
+    });
   };
   const setPeriod = (period: string) => {
     const months = PERIODS.find((p) => p.value === period)?.months ?? 1;
     setForm((prev) => ({ ...prev, period, toDate: addMonths(prev.fromDate, months) }));
   };
+  // Toggle "no expiration" for a class pass: store the sentinel, or restore a
+  // real end date from the current period when switched back on.
+  const setNoExpiry = (v: boolean) => {
+    setForm((prev) => {
+      if (v) return { ...prev, noExpiry: true, toDate: NO_EXPIRY_DATE };
+      const months = PERIODS.find((p) => p.value === prev.period)?.months ?? 1;
+      return { ...prev, noExpiry: false, toDate: addMonths(prev.fromDate, months) };
+    });
+  };
 
   const isEdit = mode === "edit";
+  const selectedPlan = planOptions.find((p) => p.id === form.planId);
+  const isClassPlan = selectedPlan?.isClassPlan ?? subscription?.isClassPlan ?? false;
 
   // Enrollment caps + cancellation balance + auto-enroll, persisted per subscription.
   const formLimits = () => ({
@@ -261,20 +289,37 @@ export function SubscriptionDialog({
                 <Field label={tr("From date")}>
                   <Input type="date" value={form.fromDate} onChange={(e) => setFrom(e.target.value)} />
                 </Field>
-                <Field label={tr("Period")}>
-                  <Select value={form.period} onValueChange={setPeriod}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {PERIODS.map((p) => (
-                        <SelectItem key={p.value} value={p.value}>{tr(p.label)}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field label={tr("To date")}>
-                  <Input type="date" value={form.toDate} onChange={(e) => set("toDate", e.target.value)} />
-                </Field>
+                {form.noExpiry ? (
+                  <Field label={tr("To date")}>
+                    <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
+                      {tr("No Expiration")}
+                    </div>
+                  </Field>
+                ) : (
+                  <>
+                    <Field label={tr("Period")}>
+                      <Select value={form.period} onValueChange={setPeriod}>
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {PERIODS.map((p) => (
+                            <SelectItem key={p.value} value={p.value}>{tr(p.label)}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <Field label={tr("To date")}>
+                      <Input type="date" value={form.toDate} onChange={(e) => set("toDate", e.target.value)} />
+                    </Field>
+                  </>
+                )}
               </div>
+
+              {isClassPlan && (
+                <label className="flex items-center gap-2.5">
+                  <Checkbox checked={form.noExpiry} onCheckedChange={(c) => setNoExpiry(c === true)} />
+                  <span className="text-sm text-[#595959]">{tr("No expiration (punch card)")}</span>
+                </label>
+              )}
 
               <div className="grid gap-4 md:grid-cols-3">
                 {!isEdit && (
@@ -338,6 +383,7 @@ export function SubscriptionDialog({
               documentLabel={tr(INVOICE_TYPES.find((t) => t.value === form.document)?.label ?? "Document")}
               fromDate={form.fromDate}
               toDate={form.toDate}
+              noExpiry={form.noExpiry}
               cost={Number(form.cost) || 0}
               onPaymentChange={setPayment}
             />
@@ -393,12 +439,14 @@ function PaymentsStep({
   documentLabel,
   fromDate,
   toDate,
+  noExpiry,
   cost,
   onPaymentChange,
 }: {
   documentLabel: string;
   fromDate: string;
   toDate: string;
+  noExpiry: boolean;
   cost: number;
   onPaymentChange: (p: PaymentSummary) => void;
 }) {
@@ -413,7 +461,11 @@ function PaymentsStep({
       </Field>
 
       <InvoiceItems
-        defaultLabel={tr("For a new subscription from date {from} to date {to}", { from: fromDate, to: toDate })}
+        defaultLabel={
+          noExpiry
+            ? tr("For a new punch-card subscription from date {from}", { from: fromDate })
+            : tr("For a new subscription from date {from} to date {to}", { from: fromDate, to: toDate })
+        }
         defaultUnitPrice={cost}
       />
 

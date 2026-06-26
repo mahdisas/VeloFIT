@@ -18,10 +18,13 @@ export function InvoiceItems({
   defaultLabel = "",
   defaultUnitPrice = 0,
   onTotalChange,
+  onItemsChange,
 }: {
   defaultLabel?: string;
   defaultUnitPrice?: number;
   onTotalChange?: (total: number) => void;
+  /** Reports the named line items (empty-label rows dropped) for persistence. */
+  onItemsChange?: (items: LineItem[]) => void;
 }) {
   const t = useT();
   const [items, setItems] = React.useState<LineItem[]>([
@@ -34,6 +37,11 @@ export function InvoiceItems({
     onTotalChange?.(total);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [total]);
+
+  React.useEffect(() => {
+    onItemsChange?.(items.filter((it) => it.label.trim() !== ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
 
   const updateItem = (id: string, patch: Partial<LineItem>) =>
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));

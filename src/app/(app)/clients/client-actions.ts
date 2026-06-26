@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { getAuthedProfile } from "@/lib/dal";
 import { DOC_TYPE_LABELS } from "@/lib/clients-server";
+import { consumeClassPass } from "@/lib/class-pass-server";
 import type { AccountingDocument } from "@/lib/clients";
 
 /**
@@ -268,6 +269,9 @@ export async function registerEntrance(clientId: string): Promise<ActionResult> 
     .single();
   if (error) return { ok: false, error: error.message };
 
+  // Punch card: this class attendance consumes one credit on an active class pass.
+  await consumeClassPass(supabase, gymId, clientId, +1);
+
   revalidatePath("/clients");
   revalidatePath(`/clients/${clientId}`);
   revalidatePath("/dashboard");
@@ -364,6 +368,7 @@ async function insertDocument(
     total: number;
     payment?: PaymentInput;
     subscriptionId?: string | null;
+    items?: LineItemInput[];
   }
 ): Promise<{ ok: true; id: string; docNumber: string; subtotal: number; vat: number } | { ok: false; error: string }> {
   const docType = DOC_TYPE_MAP[args.docTypeUi];
@@ -387,6 +392,10 @@ async function insertDocument(
       subtotal,
       vat,
       total: args.total,
+      // Link the billed subscription so Document Details can itemise the plan.
+      subscription_id: args.subscriptionId ?? null,
+      // The typed line items (named rows only) for the Document Details receipt.
+      line_items: (args.items ?? []).filter((i) => i.label.trim() !== ""),
       created_by: createdBy,
     })
     .select("id, doc_number")
@@ -639,12 +648,15 @@ export async function getSubscriptionEvents(subscriptionId: string): Promise<Sub
 }
 
 // ── Accounting documents ─────────────────────────────────────────────────────
+const lineItemSchema = z.object({ label: z.string(), qty: z.number(), unitPrice: z.number() });
 const documentCreateSchema = z.object({
   docType: z.string().min(1, "Document type is required"),
   issuedOn: z.string().min(1, "Date is required"),
   total: z.number().min(0),
+  items: z.array(lineItemSchema).optional(),
   payment: z.object({ method: z.string(), amount: z.number(), reference: z.string().optional() }).nullable().optional(),
 });
+type LineItemInput = z.infer<typeof lineItemSchema>;
 export type NewDocumentInput = z.infer<typeof documentCreateSchema>;
 
 /** Carries the freshly-created, canonical document row so the UI can render it
@@ -667,6 +679,7 @@ export async function createAccountingDocument(
     docTypeUi: v.docType,
     issuedOn: v.issuedOn,
     total: v.total,
+    items: v.items,
     payment: v.payment,
   });
   if (!doc.ok) return { ok: false, error: doc.error };
@@ -674,17 +687,214 @@ export async function createAccountingDocument(
   // Build the row exactly as getClientAccounting would map it (DB enum → label),
   // so the optimistic insert matches the post-refresh server row 1:1.
   const dbType = DOC_TYPE_MAP[v.docType];
+  const paid = v.payment && v.payment.amount > 0 && DOC_HAS_PAYMENT.has(v.docType) ? v.payment.amount : 0;
   const document: AccountingDocument = {
     id: doc.id,
     date: v.issuedOn,
     invoiceNo: doc.docNumber,
+    docType: dbType,
     type: DOC_TYPE_LABELS[dbType] ?? dbType,
     vat: doc.vat,
     amount: v.total,
+    paid,
   };
 
   revalidatePath(`/clients/${clientId}`);
   return { ok: true, id: doc.id, docNumber: doc.docNumber, document };
+}
+
+const logPaymentSchema = z.object({
+  method: z.string().min(1),
+  amount: z.number().positive("Amount must be greater than 0."),
+  reference: z.string().optional(),
+  paidAt: z.string().optional(), // "YYYY-MM-DD"; defaults to today
+});
+export type LogPaymentInput = z.infer<typeof logPaymentSchema>;
+
+/**
+ * Log a payment (a Receipt / קבלה) against an EXISTING accounting document — it
+ * inserts a payments row linked to that document_id and does NOT create a new
+ * accounting document. This is how a delayed/partial payment on an outstanding
+ * invoice is settled, vs. "New Document" which would bill the client again.
+ */
+export async function logPayment(documentId: string, input: LogPaymentInput): Promise<ActionResult> {
+  const { supabase, profile } = await getAuthedProfile();
+  const parsed = logPaymentSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  const v = parsed.data;
+
+  // The document must live in this gym; its client is the payment's client.
+  const { data: doc } = await supabase
+    .from("accounting_documents")
+    .select("client_id")
+    .eq("id", documentId)
+    .eq("gym_id", profile.gymId)
+    .maybeSingle();
+  if (!doc) return { ok: false, error: "Document not found in this gym." };
+  const clientId = (doc as { client_id: string | null }).client_id;
+
+  const { error } = await supabase.from("payments").insert({
+    gym_id: profile.gymId,
+    client_id: clientId,
+    document_id: documentId,
+    method: PAYMENT_METHOD_MAP[v.method] ?? "cash",
+    amount: v.amount,
+    paid_at: v.paidAt ? `${v.paidAt}T12:00:00` : new Date().toISOString(),
+    reference: v.reference?.trim() || null,
+    created_by: profile.userId,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  if (clientId) {
+    await logActivity(supabase, profile.gymId, profile.userId, clientId, "create", "Payment");
+    revalidatePath(`/clients/${clientId}`);
+  }
+  return { ok: true, id: documentId };
+}
+
+// ── Document details (view-only receipt) ─────────────────────────────────────
+
+/** One payment attached to a document, for the details modal's payment history. */
+export type DocumentPaymentLine = {
+  id: string;
+  date: string; // ISO timestamp (paid_at)
+  method: string; // payment_method enum
+  reference: string | null;
+  amount: number;
+};
+/** Everything the Document Details modal renders for a single document. */
+export type DocumentDetails = {
+  id: string;
+  docType: string; // document_type enum
+  typeLabel: string; // English label — translate in the UI
+  docNumber: string;
+  date: string; // issued_on (ISO date)
+  clientName: string;
+  subtotal: number;
+  vat: number;
+  total: number;
+  paid: number;
+  balance: number;
+  /** Typed line items entered on the document (empty for subscription docs). */
+  lineItems: { name: string; qty: number; unitPrice: number; total: number }[];
+  /** The subscription/plan this document bills, when linked (null = standalone). */
+  item: {
+    planName: string;
+    isClassPlan: boolean;
+    classesLimit: number | null;
+    classesUsed: number;
+    startDate: string;
+    endDate: string;
+  } | null;
+  payments: DocumentPaymentLine[];
+};
+
+type DocRow = {
+  id: string;
+  doc_type: string;
+  doc_number: string;
+  issued_on: string;
+  subtotal: number | null;
+  vat: number | null;
+  total: number | null;
+  subscription_id: string | null;
+  line_items: { label?: string; qty?: number; unitPrice?: number }[] | null;
+  client: { full_name: string } | null;
+};
+type DocPayRow = { id: string; paid_at: string; method: string; reference: string | null; amount: number | null };
+type DocSubRow = {
+  start_date: string;
+  end_date: string;
+  classes_used: number | null;
+  plan: { name: string; is_class_plan: boolean; classes_limit: number | null } | null;
+};
+
+/**
+ * Read-only details for one accounting document: header, client, the plan it
+ * bills (itemised), financial totals, and its full payment history. Gym-scoped.
+ */
+export async function getDocumentDetails(
+  documentId: string
+): Promise<{ ok: true; details: DocumentDetails } | { ok: false; error: string }> {
+  const { supabase, profile } = await getAuthedProfile();
+
+  const { data: docData, error } = await supabase
+    .from("accounting_documents")
+    .select("id, doc_type, doc_number, issued_on, subtotal, vat, total, subscription_id, line_items, client:clients(full_name)")
+    .eq("id", documentId)
+    .eq("gym_id", profile.gymId)
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (!docData) return { ok: false, error: "Document not found in this gym." };
+  const d = docData as unknown as DocRow;
+
+  // Named line items typed on the document (drives the receipt's itemisation).
+  const lineItems = (Array.isArray(d.line_items) ? d.line_items : [])
+    .filter((i) => (i.label ?? "").trim() !== "")
+    .map((i) => {
+      const qty = Number(i.qty ?? 1);
+      const unitPrice = Number(i.unitPrice ?? 0);
+      return { name: (i.label ?? "").trim(), qty, unitPrice, total: round2(qty * unitPrice) };
+    });
+
+  // Payment history for this document (the receipt's payment list).
+  const { data: payData } = await supabase
+    .from("payments")
+    .select("id, paid_at, method, reference, amount")
+    .eq("gym_id", profile.gymId)
+    .eq("document_id", documentId)
+    .order("paid_at", { ascending: true });
+  const payments: DocumentPaymentLine[] = ((payData ?? []) as DocPayRow[]).map((p) => ({
+    id: p.id,
+    date: p.paid_at,
+    method: p.method,
+    reference: p.reference,
+    amount: Number(p.amount ?? 0),
+  }));
+  const paid = round2(payments.reduce((s, p) => s + p.amount, 0));
+  const total = Number(d.total ?? 0);
+
+  // Itemisation: the plan this document bills (when the subscription is linked).
+  let item: DocumentDetails["item"] = null;
+  if (d.subscription_id) {
+    const { data: subData } = await supabase
+      .from("subscriptions")
+      .select("start_date, end_date, classes_used, plan:subscription_plans(name, is_class_plan, classes_limit)")
+      .eq("id", d.subscription_id)
+      .eq("gym_id", profile.gymId)
+      .maybeSingle();
+    if (subData) {
+      const s = subData as unknown as DocSubRow;
+      item = {
+        planName: s.plan?.name ?? "—",
+        isClassPlan: s.plan?.is_class_plan ?? false,
+        classesLimit: s.plan?.classes_limit ?? null,
+        classesUsed: Number(s.classes_used ?? 0),
+        startDate: s.start_date,
+        endDate: s.end_date,
+      };
+    }
+  }
+
+  return {
+    ok: true,
+    details: {
+      id: d.id,
+      docType: d.doc_type,
+      typeLabel: DOC_TYPE_LABELS[d.doc_type] ?? d.doc_type,
+      docNumber: d.doc_number,
+      date: d.issued_on,
+      clientName: d.client?.full_name ?? "—",
+      subtotal: Number(d.subtotal ?? 0),
+      vat: Number(d.vat ?? 0),
+      total,
+      paid,
+      balance: round2(total - paid),
+      lineItems,
+      item,
+      payments,
+    },
+  };
 }
 
 // ── Measurements ─────────────────────────────────────────────────────────────

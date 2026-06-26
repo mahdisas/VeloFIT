@@ -23,7 +23,7 @@ export default async function ClientsPage() {
     .select("id, client_number, full_name, national_id, birth_date, phone, gender, avatar_url")
     .eq("gym_id", profile.gymId)
     .neq("status", "archived")
-    .order("client_number", { ascending: true });
+    .order("client_number", { ascending: false }); // newest-added first (stack order)
 
   const clients: ClientListRow[] = (data ?? []).map(mapClientRow);
 

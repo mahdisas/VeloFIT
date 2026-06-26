@@ -25,7 +25,10 @@ import {
   deleteSubscription,
   updateMeasurement,
 } from "@/app/(app)/clients/client-actions";
+import { ClassPassBadge } from "@/components/clients/class-pass-badge";
+import { DocumentDetailsDialog } from "@/components/clients/document-details-dialog";
 import { DocumentDialog } from "@/components/clients/document-dialog";
+import { LogPaymentDialog } from "@/components/clients/log-payment-dialog";
 import { FormDialog } from "@/components/clients/form-dialog";
 import {
   type Column,
@@ -63,6 +66,8 @@ import {
   type ClientTask,
   type Communication,
   INVOICE_TYPES,
+  INVOICE_DOC_TYPES,
+  isNoExpiry,
   measurementColumnLabel,
   type MeasurementEntry,
   type MeasurementType,
@@ -163,7 +168,8 @@ function SubscriptionsTab({
     { key: "status", header: tr("Status"), sortable: true, cell: (r) => <StatusBadge status={r.status} /> },
     { key: "group", header: tr("Group"), sortable: true, cell: (r) => <span dir="auto" className="inline-block max-w-40 truncate align-middle">{r.group}</span> },
     { key: "from", header: tr("From Date"), sortable: true, cell: (r) => fmtDate(r.fromDate) },
-    { key: "to", header: tr("To Date"), sortable: true, cell: (r) => fmtDate(r.toDate) },
+    { key: "to", header: tr("To Date"), sortable: true, cell: (r) => (isNoExpiry(r.toDate) ? <span className="text-muted-foreground">{tr("No Expiration")}</span> : fmtDate(r.toDate)) },
+    { key: "classes", header: tr("Classes"), cell: (r) => (r.isClassPlan ? <ClassPassBadge used={r.classesUsed} limit={r.classesLimit} /> : <span className="text-muted-foreground">—</span>) },
     { key: "balance", header: tr("Balance"), sortable: true, cell: (r) => (r.balance == null ? "—" : money(r.balance)) },
     {
       key: "actions",
@@ -219,12 +225,51 @@ function AccountingTab({ rows: serverRows, clientId }: { rows: AccountingDocumen
   const [rows, setRows] = React.useState(serverRows);
   React.useEffect(() => setRows(serverRows), [serverRows]);
 
+  // The document a payment is currently being logged against (Receipt modal).
+  const [payDoc, setPayDoc] = React.useState<AccountingDocument | null>(null);
+  // The document whose read-only details are being viewed.
+  const [viewId, setViewId] = React.useState<string | null>(null);
+  // A billable charge with money still owed can take a payment.
+  const canPay = (r: AccountingDocument) => INVOICE_DOC_TYPES.includes(r.docType) && r.amount - r.paid > 0.005;
+
   const columns: Column<AccountingDocument>[] = [
     { key: "date", header: tr("Date"), sortValue: (r) => r.date, cell: (r) => fmtDate(r.date) },
-    { key: "no", header: tr("Invoice No."), sortValue: (r) => r.invoiceNo, cell: (r) => r.invoiceNo },
+    { key: "no", header: tr("Invoice No."), sortValue: (r) => r.invoiceNo, className: "text-center tabular-nums", headClassName: "text-center [&_button]:justify-center", cell: (r) => r.invoiceNo },
     { key: "type", header: tr("Invoice Type"), sortValue: (r) => tr(r.type), cell: (r) => <span className="text-amber-600">{tr(r.type)}</span> },
     { key: "vat", header: tr("VAT"), sortValue: (r) => r.vat, cell: (r) => money(r.vat) },
     { key: "amount", header: tr("Amount"), sortValue: (r) => r.amount, cell: (r) => money(r.amount) },
+    {
+      key: "paid",
+      header: tr("Paid"),
+      sortValue: (r) => r.paid,
+      cell: (r) => {
+        if (!INVOICE_DOC_TYPES.includes(r.docType)) return <span className="text-muted-foreground">{money(r.paid)}</span>;
+        const settled = r.paid >= r.amount - 0.005;
+        return <span className={settled ? "text-emerald-600" : "text-amber-600"}>{money(r.paid)}</span>;
+      },
+    },
+    {
+      key: "actions",
+      header: "",
+      headClassName: "w-40",
+      cell: (r) => (
+        <div className="flex items-center justify-end gap-1">
+          {canPay(r) && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation(); // don't also open the details view
+                setPayDoc(r);
+              }}
+            >
+              {tr("Log Payment")}
+            </Button>
+          )}
+        </div>
+      ),
+    },
   ];
 
   const typeLabel = INVOICE_TYPES.find((t) => t.value === docType)?.label ?? "";
@@ -234,7 +279,7 @@ function AccountingTab({ rows: serverRows, clientId }: { rows: AccountingDocumen
       <ProfileTablePanel
         rows={rows}
         columns={columns}
-        defaultSort={{ key: "date", dir: "desc" }}
+        onRowClick={(r) => setViewId(r.id)}
         toolbar={
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -261,6 +306,29 @@ function AccountingTab({ rows: serverRows, clientId }: { rows: AccountingDocumen
           router.refresh(); // reconcile with server truth (no hard reload)
         }}
       />
+
+      {payDoc && (
+        <LogPaymentDialog
+          key={payDoc.id}
+          documentId={payDoc.id}
+          invoiceNo={payDoc.invoiceNo}
+          balance={Math.round((payDoc.amount - payDoc.paid) * 100) / 100}
+          onOpenChange={(o) => !o && setPayDoc(null)}
+          onLogged={(amt) => {
+            setRows((prev) => prev.map((d) => (d.id === payDoc.id ? { ...d, paid: d.paid + amt } : d)));
+            setPayDoc(null);
+            router.refresh(); // reconcile with server truth
+          }}
+        />
+      )}
+
+      {viewId && (
+        <DocumentDetailsDialog
+          key={viewId}
+          documentId={viewId}
+          onOpenChange={(o) => !o && setViewId(null)}
+        />
+      )}
     </SubTabFrame>
   );
 }

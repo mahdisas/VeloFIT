@@ -22,6 +22,8 @@ export type PackageInput = {
   isTrialLesson: boolean;
   showInApp: boolean;
   description?: string;
+  isClassPlan: boolean;
+  classesLimit: number | null;
 };
 
 export type ActionResult = { ok: true; id: string } | { ok: false; error: string };
@@ -38,6 +40,11 @@ const schema = z.object({
   isTrialLesson: z.boolean(),
   showInApp: z.boolean(),
   description: z.string().optional(),
+  isClassPlan: z.boolean(),
+  classesLimit: z.number().int().positive().nullable(),
+}).refine((d) => !d.isClassPlan || (d.classesLimit != null && d.classesLimit >= 1), {
+  message: "A class pass needs a classes limit of at least 1.",
+  path: ["classesLimit"],
 });
 
 export async function savePackage(input: PackageInput): Promise<ActionResult> {
@@ -58,6 +65,8 @@ export async function savePackage(input: PackageInput): Promise<ActionResult> {
     is_trial_lesson: v.isTrialLesson,
     show_in_app: v.showInApp,
     description: v.description?.trim() ? v.description.trim() : null,
+    is_class_plan: v.isClassPlan,
+    classes_limit: v.isClassPlan ? v.classesLimit : null,
   };
 
   if (v.id) {

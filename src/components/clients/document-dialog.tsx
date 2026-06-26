@@ -5,7 +5,7 @@ import { SendHorizontal } from "lucide-react";
 import { toast } from "sonner";
 
 import { createAccountingDocument } from "@/app/(app)/clients/client-actions";
-import { InvoiceItems } from "@/components/clients/invoice-items";
+import { InvoiceItems, type LineItem } from "@/components/clients/invoice-items";
 import { PaymentOptions, type PaymentSummary } from "@/components/clients/payment-options";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,6 +61,7 @@ export function DocumentDialog({
   const tr = useT();
   const [date, setDate] = React.useState(today());
   const totalRef = React.useRef(0);
+  const itemsRef = React.useRef<LineItem[]>([]);
   const paymentRef = React.useRef<PaymentSummary>({ method: "cash", total: 0 });
   const [pending, startTransition] = React.useTransition();
 
@@ -69,6 +70,7 @@ export function DocumentDialog({
     if (open) {
       setDate(today());
       totalRef.current = 0;
+      itemsRef.current = [];
       paymentRef.current = { method: "cash", total: 0 };
     }
   }, [open]);
@@ -82,6 +84,7 @@ export function DocumentDialog({
         docType: type,
         issuedOn: date,
         total: totalRef.current,
+        items: itemsRef.current.map((it) => ({ label: it.label, qty: it.qty, unitPrice: it.unitPrice })),
         payment:
           showPayments && paymentRef.current.total > 0
             ? { method: paymentRef.current.method, amount: paymentRef.current.total, reference: paymentRef.current.reference }
@@ -112,7 +115,10 @@ export function DocumentDialog({
           </div>
 
           {/* Items are common to every document type */}
-          <InvoiceItems onTotalChange={(total) => (totalRef.current = total)} />
+          <InvoiceItems
+            onTotalChange={(total) => (totalRef.current = total)}
+            onItemsChange={(items) => (itemsRef.current = items)}
+          />
 
           {/* Only payment-bearing types show this */}
           {showPayments && (

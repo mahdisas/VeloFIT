@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Clock, FileText, Loader2, Lock, RotateCcw, SendHorizontal, Trash2, UserPlus, Users } from "lucide-react";
 
 import {
+  deleteSingleSession,
   enrollClientInSession,
   getSessionRoster,
   searchEnrollableClients,
@@ -13,7 +14,18 @@ import {
   toggleAttendance,
   type RosterMember,
 } from "@/app/(app)/classes/calendar/actions";
-import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -51,6 +63,7 @@ export function ClassAttendanceSheet({
   open,
   onOpenChange,
   adjustEnrolled,
+  onCanceled,
 }: {
   session: CalendarSession | null;
   date: Date;
@@ -58,6 +71,7 @@ export function ClassAttendanceSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   adjustEnrolled: (sessionId: string, delta: number) => void;
+  onCanceled: (sessionId: string) => void;
 }) {
   const t = useT();
   return (
@@ -67,7 +81,7 @@ export function ClassAttendanceSheet({
         className="flex w-full flex-col gap-0 rounded-none p-0 data-[side=bottom]:h-dvh sm:mx-auto sm:max-w-lg sm:rounded-t-3xl sm:data-[side=bottom]:h-[90dvh]"
       >
         {session ? (
-          <Body session={session} date={date} isPast={isPast} adjustEnrolled={adjustEnrolled} />
+          <Body session={session} date={date} isPast={isPast} adjustEnrolled={adjustEnrolled} onCanceled={onCanceled} />
         ) : (
           <SheetHeader>
             <SheetTitle>{t("Class")}</SheetTitle>
@@ -83,11 +97,13 @@ function Body({
   date,
   isPast,
   adjustEnrolled,
+  onCanceled,
 }: {
   session: CalendarSession;
   date: Date;
   isPast: boolean;
   adjustEnrolled: (sessionId: string, delta: number) => void;
+  onCanceled: (sessionId: string) => void;
 }) {
   const t = useT();
   const [roster, setRoster] = React.useState<RosterMember[]>([]);
@@ -217,6 +233,18 @@ function Body({
     });
   };
 
+  /** Cancel this single session (owner) — drops it from the calendar; roster kept. */
+  const handleCancelClass = () =>
+    startTransition(async () => {
+      const result = await deleteSingleSession(session.id);
+      if (!result.success) {
+        toast.error(result.message);
+        return;
+      }
+      toast.success(t("Session canceled"));
+      onCanceled(session.id);
+    });
+
   return (
     <>
       {/* Grab handle + header */}
@@ -332,6 +360,36 @@ function Body({
             <p className="text-sm text-muted-foreground">{t("The waitlist is empty.")}</p>
           </div>
         </section>
+
+        {/* Cancel the class (future sessions only) — confirmed before it runs. */}
+        {!isPast && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={pending}
+                className="mt-2 w-full border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="size-4" /> {t("Cancel class")}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{t("Cancel this session?")}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t("This occurrence will be canceled and removed from the calendar. Its roster is kept for history.")}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{t("Keep")}</AlertDialogCancel>
+                <AlertDialogAction className={cn(buttonVariants({ variant: "destructive" }))} onClick={handleCancelClass}>
+                  {t("Cancel session")}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </div>
     </>
   );

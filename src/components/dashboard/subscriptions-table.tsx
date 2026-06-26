@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { isNoExpiry } from "@/lib/clients";
 import { type SubscriptionRow } from "@/lib/dashboard";
 import { formatDate } from "@/lib/format";
 import { useT } from "@/lib/i18n/provider";
@@ -132,7 +133,7 @@ export function SubscriptionsTable({
                       {formatDate(row.startDate)}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {formatDate(row.endDate)}
+                      {isNoExpiry(row.endDate) ? t("No Expiration") : formatDate(row.endDate)}
                     </TableCell>
                   </TableRow>
                 ))

@@ -101,6 +101,18 @@ export function MobileHome({ initialSessions }: { initialSessions: CalendarSessi
 
   const [openSession, setOpenSession] = React.useState<CalendarSession | null>(null);
 
+  // A canceled class drops out of the day's list (MobileHome filters !canceled).
+  const markSessionCanceled = React.useCallback((sessionId: string) => {
+    setByDate((prev) => {
+      const next: CalendarSessionMap = {};
+      for (const [date, list] of Object.entries(prev)) {
+        next[date] = list.map((s) => (s.id === sessionId ? { ...s, canceled: true } : s));
+      }
+      return next;
+    });
+    setOpenSession(null);
+  }, []);
+
   return (
     <div className="flex min-h-full flex-col">
       {/* Sticky date scroller */}
@@ -216,6 +228,7 @@ export function MobileHome({ initialSessions }: { initialSessions: CalendarSessi
         open={openSession !== null}
         onOpenChange={(o) => !o && setOpenSession(null)}
         adjustEnrolled={adjustEnrolled}
+        onCanceled={markSessionCanceled}
       />
     </div>
   );

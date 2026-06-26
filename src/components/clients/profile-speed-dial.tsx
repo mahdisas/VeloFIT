@@ -9,7 +9,7 @@ import { createSubscription } from "@/app/(app)/clients/client-actions";
 import { FormDialog } from "@/components/clients/form-dialog";
 import { SubscriptionDialog } from "@/components/clients/subscription-dialog";
 import { Button } from "@/components/ui/button";
-import { INVOICE_TYPES, type SubscriptionPlanOption } from "@/lib/clients";
+import { INVOICE_TYPES, NO_EXPIRY_DATE, type SubscriptionPlanOption } from "@/lib/clients";
 import { useT } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 
@@ -62,7 +62,8 @@ export function ProfileSpeedDial({
               void createSubscription(clientId, {
                 planId,
                 startDate: start,
-                endDate: addMonths(start, plan?.periodMonths ?? 1),
+                // Class passes are endless on time — store the no-expiry sentinel.
+                endDate: plan?.isClassPlan ? NO_EXPIRY_DATE : addMonths(start, plan?.periodMonths ?? 1),
                 cost: Number(v.cost) || 0,
                 notes: String(v.notes || ""),
                 documentType: String(v.document || "receipt_tax_invoice"),

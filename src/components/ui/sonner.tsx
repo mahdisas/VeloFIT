@@ -11,6 +11,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
+      // Phone-style dismissal: flick a notification up to clear it (top-anchored).
+      swipeDirections={["top"]}
       icons={{
         success: (
           <CircleCheckIcon className="size-4" />

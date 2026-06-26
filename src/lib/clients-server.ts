@@ -6,6 +6,7 @@ import {
   ageFromBirthDate,
   mapClientRow,
   CLIENT_LIST_COLUMNS,
+  INVOICE_DOC_TYPES,
   type AccountingDocument,
   type ActivityLog,
   type ClassHistoryEntry,
@@ -44,7 +45,7 @@ export async function getClients(): Promise<ClientListRow[]> {
     .from("clients")
     .select(CLIENT_LIST_COLUMNS)
     .neq("status", "archived")
-    .order("client_number", { ascending: true });
+    .order("client_number", { ascending: false }); // newest-added first (stack order)
 
   if (error) throw new Error(`Failed to load clients: ${error.message}`);
   return ((data ?? []) as ClientListDbRow[]).map(mapClientRow);
@@ -57,7 +58,7 @@ export async function getArchivedClients(): Promise<ClientListRow[]> {
     .from("clients")
     .select(CLIENT_LIST_COLUMNS)
     .eq("status", "archived")
-    .order("client_number", { ascending: true });
+    .order("client_number", { ascending: false }); // newest-added first (stack order)
 
   if (error) throw new Error(`Failed to load archived clients: ${error.message}`);
   return ((data ?? []) as ClientListDbRow[]).map(mapClientRow);
@@ -68,8 +69,8 @@ export async function getArchivedClients(): Promise<ClientListRow[]> {
  * Must include every payment-bearing type (see DOC_HAS_PAYMENT in client-actions)
  * — otherwise recording a payment on it would push the balance negative.
  * "informal" carries a payment, so it counts as a charge.
+ * (INVOICE_DOC_TYPES is the single source of truth in lib/clients.ts.)
  */
-const INVOICE_DOC_TYPES = ["tax_invoice", "receipt_tax_invoice", "receipt", "informal"];
 
 /**
  * A client's outstanding balance = Σ invoiced documents − Σ payments, tenant-scoped.
@@ -169,11 +170,11 @@ export async function getClientSubscriptions(
     supabase
       .from("subscriptions")
       .select(
-        "id, plan_id, start_date, end_date, status, price_paid, notes, plan:subscription_plans(name, group:class_groups(name))"
+        "id, plan_id, start_date, end_date, status, price_paid, classes_used, notes, plan:subscription_plans(name, is_class_plan, classes_limit, group:class_groups(name))"
       )
       .eq("gym_id", gymId)
       .eq("client_id", clientId)
-      .order("end_date", { ascending: false }),
+      .order("created_at", { ascending: false }), // newest-added first (stack order)
     supabase
       .from("payments")
       .select("subscription_id, amount")
@@ -200,9 +201,19 @@ export async function getClientSubscriptions(
   return ((subsRes.data ?? []) as unknown as SubscriptionRow[]).map((r) => {
     const cost = Number(r.price_paid ?? 0);
     const paid = paidBySub.get(r.id) ?? 0;
+    const isClassPlan = r.plan?.is_class_plan ?? false;
+    const classesLimit = r.plan?.classes_limit ?? null;
+    const classesUsed = Number(r.classes_used ?? 0);
+    // Strict punch-card limit: a class pass that has used all its credits is
+    // "completed" — it stops reading as active (the owner's cue to renew). Time
+    // never expires it (see NO_EXPIRY_DATE); only the credit count or the date do.
+    let eff = effectiveStatus(r.status, r.start_date, r.end_date);
+    if (eff === "active" && isClassPlan && classesLimit != null && classesUsed >= classesLimit) {
+      eff = "completed"; // not in {active,frozen,expired} → toUiStatus maps to "inactive"
+    }
     return {
       id: r.id,
-      status: toUiStatus(effectiveStatus(r.status, r.start_date, r.end_date)),
+      status: toUiStatus(eff),
       group: r.plan?.group?.name ?? r.plan?.name ?? "—",
       fromDate: r.start_date,
       toDate: r.end_date,
@@ -211,6 +222,9 @@ export async function getClientSubscriptions(
       cost,
       notes: r.notes ?? "",
       limits: { ...DEFAULT_SUBSCRIPTION_LIMITS, ...(limitsById[r.id] ?? {}) },
+      isClassPlan,
+      classesLimit,
+      classesUsed,
     };
   });
 }
@@ -221,8 +235,9 @@ type SubscriptionRow = {
   end_date: string;
   status: string;
   price_paid: number | null;
+  classes_used: number | null;
   notes: string | null;
-  plan: { name: string; group: { name: string } | null } | null;
+  plan: { name: string; is_class_plan: boolean; classes_limit: number | null; group: { name: string } | null } | null;
 };
 
 /**
@@ -236,7 +251,7 @@ export async function getSubscriptionPlanOptions(
 ): Promise<SubscriptionPlanOption[]> {
   const { data, error } = await supabase
     .from("subscription_plans")
-    .select("id, name, price, period_months, group:class_groups(name)")
+    .select("id, name, price, period_months, is_class_plan, classes_limit, group:class_groups(name)")
     .eq("gym_id", gymId)
     .eq("is_active", true)
     .order("name", { ascending: true });
@@ -249,6 +264,8 @@ export async function getSubscriptionPlanOptions(
     planName: p.name,
     price: Number(p.price ?? 0),
     periodMonths: p.period_months ?? 1,
+    isClassPlan: p.is_class_plan ?? false,
+    classesLimit: p.classes_limit ?? null,
   }));
 }
 type PlanOptionRow = {
@@ -256,6 +273,8 @@ type PlanOptionRow = {
   name: string;
   price: number | null;
   period_months: number | null;
+  is_class_plan: boolean | null;
+  classes_limit: number | null;
   group: { name: string } | null;
 };
 
@@ -280,17 +299,35 @@ export async function getClientAccounting(
     .select("id, issued_on, doc_number, doc_type, vat, total")
     .eq("gym_id", gymId)
     .eq("client_id", clientId)
-    .order("issued_on", { ascending: false });
+    .order("created_at", { ascending: false }); // newest-added first (stack order)
 
   if (error) throw new Error(`Failed to load accounting documents: ${error.message}`);
+  const docs = (data ?? []) as unknown as AccountingRow[];
 
-  return ((data ?? []) as unknown as AccountingRow[]).map((r) => ({
+  // How much has actually been paid against each document (payments.document_id).
+  const paidByDoc = new Map<string, number>();
+  if (docs.length) {
+    const { data: pays, error: payErr } = await supabase
+      .from("payments")
+      .select("document_id, amount")
+      .eq("gym_id", gymId)
+      .in("document_id", docs.map((d) => d.id));
+    if (payErr) throw new Error(`Failed to load payments: ${payErr.message}`);
+    for (const p of (pays ?? []) as { document_id: string | null; amount: number }[]) {
+      if (!p.document_id) continue;
+      paidByDoc.set(p.document_id, (paidByDoc.get(p.document_id) ?? 0) + Number(p.amount));
+    }
+  }
+
+  return docs.map((r) => ({
     id: r.id,
     date: r.issued_on,
     invoiceNo: r.doc_number,
+    docType: r.doc_type,
     type: DOC_TYPE_LABELS[r.doc_type] ?? r.doc_type,
     vat: Number(r.vat),
     amount: Number(r.total),
+    paid: Math.round((paidByDoc.get(r.id) ?? 0) * 100) / 100,
   }));
 }
 type AccountingRow = { id: string; issued_on: string; doc_number: string; doc_type: string; vat: number; total: number };
@@ -335,7 +372,7 @@ export async function getClientMeasurements(
     .select("id, measured_on, values:client_measurement_values(value, measurement_type_id)")
     .eq("gym_id", gymId)
     .eq("client_id", clientId)
-    .order("measured_on", { ascending: false });
+    .order("created_at", { ascending: false }); // newest-added first (stack order)
 
   if (error) throw new Error(`Failed to load measurements: ${error.message}`);
 
