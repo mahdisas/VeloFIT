@@ -4,6 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 
+import { loginAsClient, loginWithPhone, type MemberCandidate } from "@/app/login/member-actions";
 import { createClient, setSessionPersistence } from "@/lib/supabase/client";
 import { rememberGymCode, readGymCode, STAFF_EMAIL_DOMAIN } from "@/lib/auth";
 import { setLocale } from "@/lib/i18n/actions";
@@ -22,6 +23,33 @@ import {
 } from "@/components/ui/select";
 
 /**
+ * Make the typed phone local-only for the chosen country: drop a leading "+" and,
+ * if the user still typed the dial code, strip it — so with +972 selected, both
+ * "0500000000" and "+972 50-000-0000" are sent as the same local number. (A leading
+ * trunk "0" is kept; the server normalizes it away when matching.)
+ */
+function localPhone(raw: string, dial: string): string {
+  const d = raw.replace(/[^\d+]/g, "").replace(/^\+/, "");
+  return dial && d.startsWith(dial) ? d.slice(dial.length) : d;
+}
+
+/** Dial codes for the member phone login. Israel (+972) is the default. */
+const COUNTRY_CODES = [
+  { dial: "972", label: "🇮🇱 +972" },
+  { dial: "970", label: "🇵🇸 +970" },
+  { dial: "1", label: "🇺🇸 +1" },
+  { dial: "44", label: "🇬🇧 +44" },
+  { dial: "971", label: "🇦🇪 +971" },
+  { dial: "966", label: "🇸🇦 +966" },
+  { dial: "962", label: "🇯🇴 +962" },
+  { dial: "961", label: "🇱🇧 +961" },
+  { dial: "20", label: "🇪🇬 +20" },
+  { dial: "49", label: "🇩🇪 +49" },
+  { dial: "33", label: "🇫🇷 +33" },
+  { dial: "7", label: "🇷🇺 +7" },
+];
+
+/**
  * Staff (management dashboard) login. Authenticates with Supabase email/password,
  * then verifies the signed-in profile belongs to the entered Gym Code (the gym's
  * slug) before entering the dashboard.
@@ -37,6 +65,15 @@ export function LoginForm() {
   const [showPassword, setShowPassword] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // Temporary member (phone + gym code) login — toggled by the blue link.
+  const [mode, setMode] = React.useState<"staff" | "member">("staff");
+  const [phone, setPhone] = React.useState("");
+  const [dialCode, setDialCode] = React.useState("972");
+  const [candidates, setCandidates] = React.useState<MemberCandidate[] | null>(null);
+  const [memberLoading, setMemberLoading] = React.useState(false);
+  const [memberError, setMemberError] = React.useState<string | null>(null);
+  const [memberName, setMemberName] = React.useState<string | null>(null);
 
   // Pre-fill the gym code from the last successful login on this device.
   React.useEffect(() => {
@@ -126,6 +163,60 @@ export function LoginForm() {
     }
   };
 
+  // Enter the app once a single member is resolved (sets the session cookie).
+  const enterApp = (name: string) => {
+    rememberGymCode(gymCode.trim());
+    setMemberName(name);
+    router.push("/app/home");
+    router.refresh();
+  };
+
+  const onMemberSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMemberError(null);
+    setMemberName(null);
+    setCandidates(null);
+
+    if (!phone.trim() || !gymCode.trim()) {
+      setMemberError(t("Please fill in all fields."));
+      return;
+    }
+
+    setMemberLoading(true);
+    try {
+      const res = await loginWithPhone({ phone: localPhone(phone, dialCode), dialCode, gymCode: gymCode.trim() });
+      if (res.status === "error") {
+        setMemberError(t(res.error));
+      } else if (res.status === "select") {
+        // Several clients share this number — let the user pick which to enter as.
+        setCandidates(res.candidates);
+      } else {
+        enterApp(res.name);
+      }
+    } catch {
+      setMemberError(t("Couldn't reach the server. Please try again."));
+    } finally {
+      setMemberLoading(false);
+    }
+  };
+
+  const chooseClient = async (clientId: string) => {
+    setMemberError(null);
+    setMemberLoading(true);
+    try {
+      const res = await loginAsClient({ clientId, phone: localPhone(phone, dialCode), dialCode, gymCode: gymCode.trim() });
+      if (res.status !== "ok") {
+        setMemberError(t(res.status === "error" ? res.error : "Couldn't reach the server. Please try again."));
+        return;
+      }
+      enterApp(res.name);
+    } catch {
+      setMemberError(t("Couldn't reach the server. Please try again."));
+    } finally {
+      setMemberLoading(false);
+    }
+  };
+
   return (
     <div className="w-full max-w-md rounded-2xl border bg-card p-8 shadow-xl shadow-black/5">
       <div className="flex items-start justify-between gap-4">
@@ -147,6 +238,7 @@ export function LoginForm() {
         </div>
       </div>
 
+      {mode === "staff" ? (
       <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-5" noValidate>
         <Field id="gymCode" label={t("Gym Code")}>
           <Input
@@ -225,8 +317,127 @@ export function LoginForm() {
           )}
         </Button>
       </form>
-      {/* Privacy / Terms links removed for now — those pages don't exist yet
-          (were 404-ing on prefetch). Re-add once the legal pages are built. */}
+      ) : (
+      <form onSubmit={onMemberSubmit} className="mt-8 flex flex-col gap-5" noValidate>
+        <Field id="memberPhone" label={t("Phone Number")}>
+          <div className="flex" dir="ltr">
+            <Select value={dialCode} onValueChange={setDialCode} disabled={memberLoading}>
+              <SelectTrigger
+                className="h-8 w-[104px] shrink-0 rounded-e-none border-e-0 focus:z-10"
+                aria-label={t("Country code")}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                {COUNTRY_CODES.map((c) => (
+                  <SelectItem key={c.dial} value={c.dial}>{c.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              id="memberPhone"
+              type="tel"
+              inputMode="tel"
+              value={phone}
+              onChange={(e) => {
+                setPhone(e.target.value);
+                setCandidates(null);
+              }}
+              placeholder="50 000 0000"
+              autoComplete="tel"
+              dir="ltr"
+              disabled={memberLoading}
+              className="flex-1 rounded-s-none"
+            />
+          </div>
+        </Field>
+
+        <Field id="memberGym" label={t("Gym Code")}>
+          <Input
+            id="memberGym"
+            value={gymCode}
+            onChange={(e) => setGymCode(e.target.value)}
+            placeholder={t("Gym Code")}
+            autoComplete="organization"
+            autoCapitalize="none"
+            disabled={memberLoading}
+          />
+        </Field>
+
+        {memberError && (
+          <p className="text-sm text-destructive" role="alert">{memberError}</p>
+        )}
+        {memberName && (
+          <p className="text-sm font-medium text-emerald-600" role="status">
+            {t("Logged in as {name}", { name: memberName })}
+          </p>
+        )}
+
+        {candidates ? (
+          <div className="flex flex-col gap-2">
+            <p className="text-sm text-muted-foreground">
+              {t("Several members share this number. Choose your profile:")}
+            </p>
+            {candidates.map((c, i) => (
+              <button
+                key={c.id}
+                type="button"
+                disabled={memberLoading}
+                onClick={() => chooseClient(c.id)}
+                className="flex items-center justify-between gap-2 rounded-xl border px-4 py-3 text-start text-sm font-medium transition-colors hover:border-primary/50 hover:bg-muted disabled:opacity-60"
+              >
+                <span dir="auto" className="truncate">{c.name}</span>
+                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">#{i + 1}</span>
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setCandidates(null)}
+              className="mt-1 text-center text-sm text-muted-foreground hover:text-foreground"
+            >
+              {t("Back")}
+            </button>
+          </div>
+        ) : (
+          <Button type="submit" disabled={memberLoading} className="h-11 w-full text-sm font-semibold">
+            {memberLoading ? (
+              <>
+                <Loader2 className="size-4 animate-spin" /> {t("Signing in…")}
+              </>
+            ) : (
+              t("Login")
+            )}
+          </Button>
+        )}
+      </form>
+      )}
+
+      {/* Toggle between staff login and the temporary phone (member) login. */}
+      {mode === "staff" ? (
+        <button
+          type="button"
+          onClick={() => {
+            setMode("member");
+            setError(null);
+          }}
+          className="mt-5 block w-full text-center text-sm font-semibold text-blue-600 hover:underline"
+          dir="auto"
+        >
+          {t("Login using number")}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setMode("staff");
+            setMemberError(null);
+            setMemberName(null);
+          }}
+          className="mt-5 block w-full text-center text-sm font-medium text-muted-foreground hover:text-foreground"
+        >
+          {t("Back to staff login")}
+        </button>
+      )}
     </div>
   );
 }

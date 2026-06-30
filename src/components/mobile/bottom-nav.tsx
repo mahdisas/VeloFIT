@@ -8,9 +8,9 @@ import { useT } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 
 /**
- * veloFIT App navigation. Five tabs; only Home is functional today — the rest
- * route to "coming soon" placeholders. Rendered as a bottom bar on phones
- * (BottomNav) and as inline header tabs on desktop (TopNav).
+ * veloFIT App navigation. Five tabs, each a real screen (most with their own top
+ * sub-tabs). Rendered as a bottom bar on phones (BottomNav) and as inline header
+ * tabs on desktop (TopNav).
  */
 const TABS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/app/home", label: "Home", icon: Home },

@@ -215,6 +215,8 @@ type CalendarSessionRow = {
     kind_id: string;
     trainer_id: string | null;
     location_id: string | null;
+    show_enroll_list: boolean;
+    show_max_participants: boolean;
     kind: { name: string; color: string } | null;
   } | null;
 };
@@ -261,7 +263,7 @@ type SlotClassRow = {
  * This is also what makes a weekly-hours edit in the Classes Table "project"
  * onto the calendar: change the slots and the next view regenerates from them.
  */
-async function ensureSessionsForRange(
+export async function ensureSessionsForRange(
   supabase: ServerSupabase,
   gymId: string,
   start: string,
@@ -322,7 +324,7 @@ async function ensureSessionsForRange(
 }
 
 /** Sessions in [start, end] (inclusive, "YYYY-MM-DD"), grouped by session_date. */
-async function fetchCalendarSessions(
+export async function fetchCalendarSessions(
   supabase: ServerSupabase,
   gymId: string,
   start: string,
@@ -332,7 +334,7 @@ async function fetchCalendarSessions(
     .from("class_sessions")
     .select(
       `id, session_date, start_time, end_time, status, capacity, trainer_id, notes,
-       class:classes(id, name, color, kind_id, trainer_id, location_id, kind:class_kinds(name, color))`
+       class:classes(id, name, color, kind_id, trainer_id, location_id, show_enroll_list, show_max_participants, kind:class_kinds(name, color))`
     )
     .eq("gym_id", gymId)
     .gte("session_date", start)
@@ -385,6 +387,8 @@ async function fetchCalendarSessions(
       kindId: c?.kind_id ?? "",
       canceled: r.status === "canceled",
       notes: r.notes ?? "",
+      showEnrollList: c?.show_enroll_list ?? false,
+      showMaxParticipants: c?.show_max_participants ?? false,
     };
     (map[r.session_date] ??= []).push(session);
   }
@@ -423,8 +427,18 @@ async function getClassPickerOptions(supabase: ServerSupabase, gymId: string): P
 /** Sessions for a date window — used by the client's on-navigation refetch. */
 export async function getCalendarSessions(start: string, end: string): Promise<CalendarSessionMap> {
   const { supabase, profile } = await getAuthedProfile();
-  await ensureSessionsForRange(supabase, profile.gymId, start, end);
-  return fetchCalendarSessions(supabase, profile.gymId, start, end);
+  return getCalendarSessionsFor(supabase, profile.gymId, start, end);
+}
+
+/** Same as getCalendarSessions but for an explicit client + gym (member viewer). */
+export async function getCalendarSessionsFor(
+  supabase: ServerSupabase,
+  gymId: string,
+  start: string,
+  end: string
+): Promise<CalendarSessionMap> {
+  await ensureSessionsForRange(supabase, gymId, start, end);
+  return fetchCalendarSessions(supabase, gymId, start, end);
 }
 
 export type CalendarPageData = {

@@ -28,6 +28,10 @@ export type CalendarSession = {
   kindId: string;
   canceled: boolean;
   notes: string; // per-session note (interim store: gyms.settings.sessionNotes[id])
+  /** classes.show_enroll_list — may members see the participant roster (names)? */
+  showEnrollList: boolean;
+  /** classes.show_max_participants — may members see the enrolled/capacity counter? */
+  showMaxParticipants: boolean;
 };
 
 /** Sessions keyed by local ISO date ("YYYY-MM-DD") — what the grid looks up per day. */

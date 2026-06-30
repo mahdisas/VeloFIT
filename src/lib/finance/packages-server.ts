@@ -2,6 +2,9 @@ import "server-only";
 
 import { getAuthedProfile } from "@/lib/dal";
 import { type SubscriptionPackage } from "@/lib/finance/packages";
+import { type createClient } from "@/lib/supabase/server";
+
+type DB = Awaited<ReturnType<typeof createClient>>;
 
 type PlanRow = {
   id: string;
@@ -27,13 +30,16 @@ type PlanRow = {
  */
 export async function getPackages(): Promise<SubscriptionPackage[]> {
   const { supabase, profile } = await getAuthedProfile();
+  return getPackagesFor(supabase, profile.gymId);
+}
 
+export async function getPackagesFor(supabase: DB, gymId: string): Promise<SubscriptionPackage[]> {
   const { data, error } = await supabase
     .from("subscription_plans")
     .select(
       "id, name, color, group_id, price, max_purchases, period_months, max_payments, is_trial_lesson, show_in_app, description, is_class_plan, classes_limit, is_active, group:class_groups(name)"
     )
-    .eq("gym_id", profile.gymId)
+    .eq("gym_id", gymId)
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(`Failed to load packages: ${error.message}`);

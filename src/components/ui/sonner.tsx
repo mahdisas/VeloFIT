@@ -11,8 +11,10 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
-      // Phone-style dismissal: flick a notification up to clear it (top-anchored).
-      swipeDirections={["top"]}
+      // Phone-style dismissal: flick a top-anchored notification up — or sideways,
+      // the way phone notifications clear — to dismiss it. Sideways makes the
+      // gesture far more forgiving on touch screens.
+      swipeDirections={["top", "left", "right"]}
       icons={{
         success: (
           <CircleCheckIcon className="size-4" />

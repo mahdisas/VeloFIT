@@ -3,7 +3,10 @@ import "server-only";
 import { getAuthedProfile } from "@/lib/dal";
 import { type IdName } from "@/lib/classes";
 import { listTrainerOptions } from "@/lib/trainers-server";
+import { type createClient } from "@/lib/supabase/server";
 import { type Goal, type Level, type ResolvedPlan, type WorkoutDay } from "@/lib/workout-plans";
+
+type DB = Awaited<ReturnType<typeof createClient>>;
 
 /**
  * Server-only workout-plan reads. The DB workout_goal enum uses 'weight_loss';
@@ -89,10 +92,14 @@ function resolve(p: PlanRow): ResolvedPlan {
 
 export async function getWorkoutPlans(): Promise<ResolvedPlan[]> {
   const { supabase, profile } = await getAuthedProfile();
+  return getWorkoutPlansFor(supabase, profile.gymId);
+}
+
+export async function getWorkoutPlansFor(supabase: DB, gymId: string): Promise<ResolvedPlan[]> {
   const { data, error } = await supabase
     .from("workout_plans")
     .select(PLAN_SELECT)
-    .eq("gym_id", profile.gymId)
+    .eq("gym_id", gymId)
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(`Failed to load workout plans: ${error.message}`);

@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { MEMBER_COOKIE, verifyMemberToken } from "@/lib/member-token";
 import { PERSIST_COOKIE, persistFromCookieValue, scopeCookie } from "@/lib/supabase/persistence";
 
 /**
@@ -64,14 +65,28 @@ export async function proxy(request: NextRequest) {
   }
 
   const { pathname } = request.nextUrl;
+  const isApp = pathname === "/app" || pathname.startsWith("/app/");
 
-  // Signed-in users never see the login screen or the bare root — send them to
-  // the gateway (/portal), which lets them pick the Control Panel or mobile App.
+  // Staff: signed-in users never see the login screen or the bare root — send
+  // them to the gateway (/portal), which picks the Control Panel or mobile App.
   if (user && (pathname === "/login" || pathname === "/")) {
     return redirectWithSession("/portal", request, response);
   }
 
-  // Signed-out users may only reach public pages.
+  // Member (no staff session but a valid member cookie) — confined to the
+  // veloFIT App. They skip the gateway and can't reach the staff dashboard.
+  const member = user ? null : verifyMemberToken(request.cookies.get(MEMBER_COOKIE)?.value);
+  if (member) {
+    if (pathname === "/login" || pathname === "/" || pathname === "/portal") {
+      return redirectWithSession("/app/home", request, response);
+    }
+    if (!isApp && !isPublic(pathname)) {
+      return redirectWithSession("/app/home", request, response); // staff-only area
+    }
+    return response; // /app/* and public pages are fine
+  }
+
+  // Signed-out users (no staff, no member) may only reach public pages.
   if (!user && !isPublic(pathname)) {
     const target = request.nextUrl.clone();
     target.pathname = "/login";

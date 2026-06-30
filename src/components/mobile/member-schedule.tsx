@@ -1,48 +1,46 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, Lock } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 
-import { loadCalendarSessions } from "@/app/(app)/classes/calendar/actions";
-import { ClassAttendanceSheet } from "@/components/mobile/class-attendance-sheet";
+import { getMemberSessions } from "@/app/app/booking-actions";
+import { MemberClassSheet } from "@/components/mobile/member-class-sheet";
 import { MobileClassCard } from "@/components/mobile/mobile-class-card";
-import { addDays, toISO, type CalendarSession, type CalendarSessionMap } from "@/lib/calendar";
+import { addDays, toISO, type CalendarSessionMap } from "@/lib/calendar";
 import { useLocale, useT } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
 
-/** Days of past/future shown in the horizontal scroller, relative to today. */
 const PAST_DAYS = 7;
 const FUTURE_DAYS = 35;
 
-export function MobileHome({ initialSessions }: { initialSessions: CalendarSessionMap }) {
+/**
+ * Member Schedules — the same date-scroller as the owner's mobile schedule, but
+ * the sessions are pre-filtered to the member's group classes (getMemberSessions),
+ * and tapping a class opens the booking sheet (not the owner roster).
+ */
+export function MemberSchedule({ initialSessions }: { initialSessions: CalendarSessionMap }) {
   const t = useT();
   const locale = useLocale();
+  const router = useRouter();
 
-  // Local "today" (the client's clock — authoritative for the user's calendar).
   const today = React.useMemo(() => toISO(new Date()), []);
   const [selected, setSelected] = React.useState(today);
-
-  // Cache of sessions per date + the set of dates we've already fetched (so an
-  // empty day isn't re-fetched forever). Seed with the server-prefetched window.
   const [byDate, setByDate] = React.useState<CalendarSessionMap>(initialSessions);
   const [loaded, setLoaded] = React.useState<Set<string>>(() => {
     const set = new Set<string>();
-    // The page prefetched [today-2 … today+2] (server clock); local today is
-    // within ±1 of that, so it's always covered.
     const now = new Date();
     for (let i = -2; i <= 2; i++) set.add(toISO(addDays(now, i)));
     return set;
   });
   const [loadingDate, setLoadingDate] = React.useState<string | null>(null);
+  const [openId, setOpenId] = React.useState<string | null>(null);
 
-  // The dates rendered in the scroller.
   const days = React.useMemo(() => {
     const base = new Date();
     return Array.from({ length: PAST_DAYS + FUTURE_DAYS + 1 }, (_, i) => addDays(base, i - PAST_DAYS));
   }, []);
 
-  // Localized formatters (weekday + month names follow the active locale; the
-  // day number stays Latin for consistency with the rest of the app).
   const fmt = React.useMemo(
     () => ({
       weekday: new Intl.DateTimeFormat(locale, { weekday: "short" }),
@@ -52,12 +50,12 @@ export function MobileHome({ initialSessions }: { initialSessions: CalendarSessi
     [locale]
   );
 
-  // Fetch a day's sessions the first time it's selected.
+  // Fetch a day the first time it's shown.
   React.useEffect(() => {
     if (loaded.has(selected)) return;
     let active = true;
     setLoadingDate(selected);
-    loadCalendarSessions(selected, selected)
+    getMemberSessions(selected, selected)
       .then((map) => {
         if (!active) return;
         setByDate((prev) => ({ ...prev, [selected]: map[selected] ?? [] }));
@@ -69,23 +67,19 @@ export function MobileHome({ initialSessions }: { initialSessions: CalendarSessi
     };
   }, [selected, loaded]);
 
-  // Center the selected chip on first paint.
+  // After a booking/cancel: refresh the selected day's counts here, and ask the
+  // server to re-render the route so the sibling Dashboard tab's "next class"
+  // (computed server-side from the member's enrollments) reflects the change too.
+  const refreshSelected = React.useCallback(() => {
+    getMemberSessions(selected, selected).then((map) =>
+      setByDate((prev) => ({ ...prev, [selected]: map[selected] ?? [] }))
+    );
+    router.refresh();
+  }, [selected, router]);
+
   const selectedChipRef = React.useRef<HTMLButtonElement>(null);
   React.useEffect(() => {
     selectedChipRef.current?.scrollIntoView({ inline: "center", block: "nearest" });
-  }, []);
-
-  // Optimistic enrolled-count bump from the attendance sheet (keeps card badges in sync).
-  const adjustEnrolled = React.useCallback((sessionId: string, delta: number) => {
-    setByDate((prev) => {
-      const next: CalendarSessionMap = {};
-      for (const [date, list] of Object.entries(prev)) {
-        next[date] = list.map((s) =>
-          s.id === sessionId ? { ...s, enrolled: Math.max(0, s.enrolled + delta) } : s
-        );
-      }
-      return next;
-    });
   }, []);
 
   const selectedDateObj = React.useMemo(() => {
@@ -98,47 +92,21 @@ export function MobileHome({ initialSessions }: { initialSessions: CalendarSessi
     .slice()
     .sort((a, b) => a.from.localeCompare(b.from));
   const isLoading = loadingDate === selected && !loaded.has(selected);
-  const isSelectedPast = selected < today;
-
-  const [openSession, setOpenSession] = React.useState<CalendarSession | null>(null);
-
-  // A canceled class drops out of the day's list (MobileHome filters !canceled).
-  const markSessionCanceled = React.useCallback((sessionId: string) => {
-    setByDate((prev) => {
-      const next: CalendarSessionMap = {};
-      for (const [date, list] of Object.entries(prev)) {
-        next[date] = list.map((s) => (s.id === sessionId ? { ...s, canceled: true } : s));
-      }
-      return next;
-    });
-    setOpenSession(null);
-  }, []);
 
   return (
     <div className="flex min-h-full flex-col">
-      {/* Sticky date scroller */}
       <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
         <div className="flex items-baseline justify-between px-4 pt-3">
-          <h1 className="font-heading text-lg font-semibold capitalize" dir="auto">
-            {fmt.monthYear.format(selectedDateObj)}
-          </h1>
+          <h1 className="font-heading text-lg font-semibold capitalize" dir="auto">{fmt.monthYear.format(selectedDateObj)}</h1>
           {selected !== today && (
-            <button
-              type="button"
-              onClick={() => setSelected(today)}
-              className="text-sm font-medium text-primary"
-            >
-              {t("Today")}
-            </button>
+            <button type="button" onClick={() => setSelected(today)} className="text-sm font-medium text-primary">{t("Today")}</button>
           )}
         </div>
-
         <div className="flex gap-1.5 overflow-x-auto px-3 py-3 scrollbar-hide">
           {days.map((d) => {
             const iso = toISO(d);
             const isSel = iso === selected;
             const isToday = iso === today;
-            const isPast = iso < today; // past days are view-only (no enrolling)
             return (
               <button
                 key={iso}
@@ -147,41 +115,20 @@ export function MobileHome({ initialSessions }: { initialSessions: CalendarSessi
                 onClick={() => setSelected(iso)}
                 className={cn(
                   "flex w-12 shrink-0 flex-col items-center gap-1 rounded-2xl py-2 transition-colors",
-                  isSel
-                    ? "bg-primary text-primary-foreground"
-                    : cn("text-muted-foreground hover:bg-muted", isPast && "opacity-45")
+                  isSel ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
                 )}
               >
                 <span className="text-[11px] capitalize">{fmt.weekday.format(d)}</span>
                 <span className="text-base font-semibold leading-none">{d.getDate()}</span>
-                {isPast ? (
-                  <Lock className="size-2.5" />
-                ) : (
-                  <span
-                    className={cn(
-                      "size-1 rounded-full",
-                      isToday ? (isSel ? "bg-primary-foreground" : "bg-primary") : "bg-transparent"
-                    )}
-                  />
-                )}
+                <span className={cn("size-1 rounded-full", isToday ? (isSel ? "bg-primary-foreground" : "bg-primary") : "bg-transparent")} />
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Class list for the selected day */}
       <div className="flex flex-1 flex-col gap-3 p-4">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-medium text-muted-foreground capitalize" dir="auto">
-            {fmt.full.format(selectedDateObj)}
-          </p>
-          {isSelectedPast && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-              <Lock className="size-3" /> {t("Past — view only")}
-            </span>
-          )}
-        </div>
+        <p className="text-sm font-medium capitalize text-muted-foreground" dir="auto">{fmt.full.format(selectedDateObj)}</p>
 
         {isLoading ? (
           <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
@@ -204,22 +151,19 @@ export function MobileHome({ initialSessions }: { initialSessions: CalendarSessi
                 trainerName={s.trainer}
                 enrolled={s.enrolled}
                 capacity={s.capacity}
-                showParticipants
-                onClick={() => setOpenSession(s)}
+                showParticipants={s.showMaxParticipants}
+                onClick={() => setOpenId(s.id)}
               />
             ))}
           </div>
         )}
       </div>
 
-      <ClassAttendanceSheet
-        session={openSession}
-        date={selectedDateObj}
-        isPast={isSelectedPast}
-        open={openSession !== null}
-        onOpenChange={(o) => !o && setOpenSession(null)}
-        adjustEnrolled={adjustEnrolled}
-        onCanceled={markSessionCanceled}
+      <MemberClassSheet
+        sessionId={openId}
+        open={openId !== null}
+        onOpenChange={(o) => !o && setOpenId(null)}
+        onChanged={refreshSelected}
       />
     </div>
   );

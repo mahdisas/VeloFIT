@@ -307,6 +307,114 @@ export async function setEnrollmentStatus(enrollmentId: string, status: RosterSt
 
 export type SimpleResult = { success: true } | { success: false; message: string };
 
+export type WaitlistEntry = {
+  enrollmentId: string;
+  clientName: string;
+  className: string;
+  color: string;
+  date: string; // ISO
+  from: string;
+  to: string;
+};
+
+type WaitlistRow = {
+  id: string;
+  client: { full_name: string } | null;
+  session: {
+    session_date: string;
+    start_time: string;
+    end_time: string;
+    status: string;
+    class: { name: string | null; color: string | null; kind: { name: string; color: string } | null } | null;
+  } | null;
+};
+
+/**
+ * The gym's pending waitlist — every 'waitlisted' enrollment for an upcoming,
+ * non-canceled session, soonest first. Feeds the veloFIT app's owner Waiting List,
+ * where staff approve (→ booked) or reject (→ canceled) via setEnrollmentStatus.
+ * RLS scopes rows to the caller's gym.
+ */
+export async function getGymWaitlist(): Promise<WaitlistEntry[]> {
+  const { supabase, profile } = await getAuthedProfile();
+  const now = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  const today = `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
+
+  const { data } = await supabase
+    .from("class_enrollments")
+    .select(
+      `id, client:clients(full_name),
+       session:class_sessions(session_date, start_time, end_time, status,
+         class:classes(name, color, kind:class_kinds(name, color)))`
+    )
+    .eq("gym_id", profile.gymId)
+    .eq("status", "waitlisted");
+
+  const rows = ((data ?? []) as unknown as WaitlistRow[]).filter(
+    (r) => r.session && r.session.status !== "canceled" && r.session.session_date >= today
+  );
+
+  return rows
+    .map((r) => {
+      const s = r.session!;
+      return {
+        enrollmentId: r.id,
+        clientName: r.client?.full_name ?? "—",
+        className: s.class?.name ?? s.class?.kind?.name ?? "—",
+        color: s.class?.color ?? s.class?.kind?.color ?? "#ec1c79",
+        date: s.session_date,
+        from: s.start_time.slice(0, 5),
+        to: s.end_time.slice(0, 5),
+      };
+    })
+    .sort((a, b) => a.date.localeCompare(b.date) || a.from.localeCompare(b.from));
+}
+
+export type AttendanceEntry = {
+  id: string;
+  clientName: string;
+  className: string; // "" for a plain gym visit (no session)
+  color: string;
+  at: string; // checked_in_at ISO timestamp
+};
+
+type AttendanceRow = {
+  id: string;
+  checked_in_at: string;
+  client: { full_name: string } | null;
+  session: { class: { name: string | null; color: string | null; kind: { name: string; color: string } | null } | null } | null;
+};
+
+/**
+ * The gym's most recent check-ins (door entrances + class attendance), newest
+ * first — the owner's "Activity" feed in the veloFIT app. RLS scopes to the gym.
+ */
+export async function getRecentAttendance(limit = 40): Promise<AttendanceEntry[]> {
+  const { supabase, profile } = await getAuthedProfile();
+
+  const { data } = await supabase
+    .from("attendances")
+    .select(
+      `id, checked_in_at, client:clients(full_name),
+       session:class_sessions(class:classes(name, color, kind:class_kinds(name, color)))`
+    )
+    .eq("gym_id", profile.gymId)
+    .order("checked_in_at", { ascending: false })
+    .limit(limit);
+
+  return ((data ?? []) as unknown as AttendanceRow[]).map((r) => {
+    const cls = r.session?.class ?? null;
+    return {
+      id: r.id,
+      clientName: r.client?.full_name ?? "—",
+      className: cls?.name ?? cls?.kind?.name ?? "",
+      color: cls?.color ?? cls?.kind?.color ?? "#ec1c79",
+      at: r.checked_in_at,
+    };
+  });
+}
+
 /**
  * Mark an enrolled client as attended / not attended — toggles a single
  * enrollment between 'attended' and 'booked'. Both count toward capacity, so
