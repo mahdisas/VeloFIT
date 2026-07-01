@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, LayoutDashboard, Loader2, Smartphone } from "lucide-react";
+import { ArrowRight, LayoutDashboard, Loader2, Shield, Smartphone } from "lucide-react";
 
 import { useT } from "@/lib/i18n/provider";
 import { cn } from "@/lib/utils";
@@ -30,16 +30,29 @@ const CARDS = [
   },
 ] as const;
 
-export function PortalCards() {
+const ADMIN_CARD = {
+  href: "/admin",
+  icon: Shield,
+  title: "Admin Console",
+  description: "Manage every gym — create gyms, users & billing.",
+  cta: "Open Admin Console",
+} as const;
+
+export function PortalCards({ isPlatformAdmin = false }: { isPlatformAdmin?: boolean }) {
   const t = useT();
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
   const [target, setTarget] = React.useState<string | null>(null);
 
-  // Warm both routes so the click navigates instantly in production.
+  const cards = React.useMemo(
+    () => (isPlatformAdmin ? [...CARDS, ADMIN_CARD] : [...CARDS]),
+    [isPlatformAdmin]
+  );
+
+  // Warm all routes so the click navigates instantly in production.
   React.useEffect(() => {
-    for (const c of CARDS) router.prefetch(c.href);
-  }, [router]);
+    for (const c of cards) router.prefetch(c.href);
+  }, [router, cards]);
 
   const go = (href: string) => {
     setTarget(href);
@@ -48,7 +61,7 @@ export function PortalCards() {
 
   return (
     <div className="mt-8 grid gap-4 sm:grid-cols-2">
-      {CARDS.map(({ href, icon: Icon, title, description, cta }) => {
+      {cards.map(({ href, icon: Icon, title, description, cta }) => {
         const loading = pending && target === href;
         return (
           <button

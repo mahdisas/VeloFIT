@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getAuthedProfile } from "@/lib/dal";
-import { STAFF_EMAIL_DOMAIN } from "@/lib/auth";
+import { staffEmail } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { type Permissions } from "@/lib/settings/users";
 
@@ -101,7 +101,7 @@ export async function saveUser(input: UserInput): Promise<ActionResult> {
     if (newUsername !== oldUsername) {
       const slug = await gymSlug(supabase, profile.gymId);
       const { error: emailError } = await admin.auth.admin.updateUserById(v.id, {
-        email: `${newUsername}@${slug}.${STAFF_EMAIL_DOMAIN}`,
+        email: staffEmail(newUsername, slug),
         email_confirm: true,
       });
       if (emailError) {
@@ -122,7 +122,7 @@ export async function saveUser(input: UserInput): Promise<ActionResult> {
   }
 
   const slug = await gymSlug(supabase, profile.gymId);
-  const email = `${v.username.trim().toLowerCase()}@${slug}.${STAFF_EMAIL_DOMAIN}`;
+  const email = staffEmail(v.username, slug);
 
   const admin = createAdminClient();
   const { data: created, error: authError } = await admin.auth.admin.createUser({

@@ -146,6 +146,15 @@ export function LoginForm() {
         return;
       }
 
+      // Suspended gyms can't sign in. Best-effort: if gyms.is_active isn't present
+      // yet (migration 00018), this returns nothing and the gym is treated active.
+      const { data: gymState } = await supabase.from("gyms").select("is_active").eq("id", profile.gym_id).maybeSingle();
+      if (gymState && (gymState as { is_active: boolean }).is_active === false) {
+        await supabase.auth.signOut();
+        setError(t("This gym is currently suspended."));
+        return;
+      }
+
       // Remember the tenant hint, then go to the intended page (or the gateway
       // at /portal). Only same-origin relative paths are honored — no open redirect.
       rememberGymCode(gymCode.trim());

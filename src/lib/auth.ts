@@ -16,6 +16,15 @@ export const GYM_CODE_COOKIE = "velofit-gym-code";
  */
 export const STAFF_EMAIL_DOMAIN = "velofit";
 
+/**
+ * The synthesized login email for a staff account: `<username>@<slug>.<domain>`.
+ * Both parts are lowercased so login + provisioning always agree. Centralized so
+ * the login form, Settings·Users, and the platform console can't drift.
+ */
+export function staffEmail(username: string, slug: string): string {
+  return `${username.trim().toLowerCase()}@${slug.trim().toLowerCase()}.${STAFF_EMAIL_DOMAIN}`;
+}
+
 /** Persist the active gym code as a client-readable cookie (30 days). */
 export function rememberGymCode(code: string) {
   if (typeof document === "undefined") return;

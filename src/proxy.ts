@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { MEMBER_COOKIE, verifyMemberToken } from "@/lib/member-token";
+import { isPlatformAdminEmail } from "@/lib/platform-admin-shared";
 import { PERSIST_COOKIE, persistFromCookieValue, scopeCookie } from "@/lib/supabase/persistence";
 
 /**
@@ -66,16 +67,34 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isApp = pathname === "/app" || pathname.startsWith("/app/");
+  const isAdminPath = pathname === "/admin" || pathname.startsWith("/admin/");
+  const isAdmin = isPlatformAdminEmail(user?.email);
+  const member = user ? null : verifyMemberToken(request.cookies.get(MEMBER_COOKIE)?.value);
+
+  // Dedicated admin login is public (no gym code). Send already-signed-in
+  // operators straight to the console; everyone else sees the sign-in form.
+  if (pathname === "/admin/login") {
+    return user && isAdmin ? redirectWithSession("/admin", request, response) : response;
+  }
+
+  // The rest of the console is operators-only: signed-in non-admins → gateway,
+  // members → their app, signed-out → the dedicated admin login.
+  // (The (console) layout re-checks via getPlatformAdmin — this is just UX.)
+  if (isAdminPath) {
+    if (user) return isAdmin ? response : redirectWithSession("/portal", request, response);
+    if (member) return redirectWithSession("/app/home", request, response);
+    return redirectWithSession("/admin/login", request, response);
+  }
 
   // Staff: signed-in users never see the login screen or the bare root — send
-  // them to the gateway (/portal), which picks the Control Panel or mobile App.
+  // them to the gateway (/portal). Platform admins are gymless, so route them to
+  // the console instead (avoids a /portal → /login loop with no profile).
   if (user && (pathname === "/login" || pathname === "/")) {
-    return redirectWithSession("/portal", request, response);
+    return redirectWithSession(isAdmin ? "/admin" : "/portal", request, response);
   }
 
   // Member (no staff session but a valid member cookie) — confined to the
   // veloFIT App. They skip the gateway and can't reach the staff dashboard.
-  const member = user ? null : verifyMemberToken(request.cookies.get(MEMBER_COOKIE)?.value);
   if (member) {
     if (pathname === "/login" || pathname === "/" || pathname === "/portal") {
       return redirectWithSession("/app/home", request, response);

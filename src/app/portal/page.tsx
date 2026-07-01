@@ -7,6 +7,7 @@ import { PortalCards } from "@/components/portal/portal-cards";
 import { Button } from "@/components/ui/button";
 import { getGymIdentity } from "@/lib/business-server";
 import { getT } from "@/lib/i18n/server";
+import { isCurrentUserPlatformAdmin } from "@/lib/platform-admin";
 
 export const metadata: Metadata = { title: "Choose a workspace" };
 
@@ -18,7 +19,7 @@ export const metadata: Metadata = { title: "Choose a workspace" };
  */
 export default async function PortalPage() {
   const t = await getT();
-  const gym = await getGymIdentity();
+  const [gym, isPlatformAdmin] = await Promise.all([getGymIdentity(), isCurrentUserPlatformAdmin()]);
 
   return (
     <div className="relative flex min-h-dvh flex-col overflow-hidden bg-background">
@@ -46,7 +47,7 @@ export default async function PortalPage() {
           </h1>
           <p className="mt-2 text-muted-foreground">{t("Where would you like to go?")}</p>
 
-          <PortalCards />
+          <PortalCards isPlatformAdmin={isPlatformAdmin} />
         </div>
       </main>
     </div>

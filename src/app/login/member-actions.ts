@@ -33,7 +33,7 @@ function nsn(raw: string | null | undefined, dialCode: string): string {
   return d;
 }
 
-/** Resolve a gym by its code (slug), case-insensitive. */
+/** Resolve a gym by its code (slug), case-insensitive. Suspended gyms are blocked. */
 async function resolveGym(admin: Admin, gymCode: string): Promise<{ id: string } | { error: string }> {
   const { data: gym, error } = await admin
     .from("gyms")
@@ -42,6 +42,13 @@ async function resolveGym(admin: Admin, gymCode: string): Promise<{ id: string }
     .maybeSingle();
   if (error) return { error: "Couldn't reach the server. Please try again." };
   if (!gym) return { error: "Invalid Gym Code" };
+
+  // A suspended gym can't be signed into. Best-effort: if gyms.is_active doesn't
+  // exist yet (migration 00018 not applied), this returns no row and is skipped.
+  const { data: state } = await admin.from("gyms").select("is_active").eq("id", gym.id).maybeSingle();
+  if (state && (state as { is_active: boolean }).is_active === false) {
+    return { error: "This gym is currently unavailable." };
+  }
   return { id: gym.id };
 }
 
