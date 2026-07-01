@@ -53,15 +53,18 @@ export async function listGyms(): Promise<GymRow[]> {
   }[];
   if (rows.length === 0) return [];
 
-  // Lightweight tallies (gym_id column only) rather than N+1 count queries.
-  const [{ data: profs }, { data: clis }] = await Promise.all([
-    admin.from("profiles").select("gym_id").eq("is_archived", false),
-    admin.from("clients").select("gym_id").neq("status", "archived"),
-  ]);
-  const userBy = new Map<string, number>();
-  for (const p of (profs ?? []) as { gym_id: string }[]) userBy.set(p.gym_id, (userBy.get(p.gym_id) ?? 0) + 1);
-  const memberBy = new Map<string, number>();
-  for (const c of (clis ?? []) as { gym_id: string }[]) memberBy.set(c.gym_id, (memberBy.get(c.gym_id) ?? 0) + 1);
+  // Per-gym counts via fast indexed head-counts (gym_id is indexed), all in
+  // parallel — avoids streaming every profile/client row across all tenants.
+  const counts = await Promise.all(
+    rows.map(async (g) => {
+      const [users, members] = await Promise.all([
+        admin.from("profiles").select("id", { count: "exact", head: true }).eq("gym_id", g.id).eq("is_archived", false),
+        admin.from("clients").select("id", { count: "exact", head: true }).eq("gym_id", g.id).neq("status", "archived"),
+      ]);
+      return [g.id, { users: users.count ?? 0, members: members.count ?? 0 }] as const;
+    })
+  );
+  const countBy = new Map(counts);
 
   return rows.map((g) => ({
     id: g.id,
@@ -70,8 +73,8 @@ export async function listGyms(): Promise<GymRow[]> {
     isActive: g.is_active,
     messagesBalance: Number(g.messages_balance ?? 0),
     createdAt: g.created_at,
-    userCount: userBy.get(g.id) ?? 0,
-    memberCount: memberBy.get(g.id) ?? 0,
+    userCount: countBy.get(g.id)?.users ?? 0,
+    memberCount: countBy.get(g.id)?.members ?? 0,
   }));
 }
 

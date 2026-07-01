@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Loader2, Shield } from "lucide-react";
 
 import { checkPlatformAdmin } from "@/app/admin/login/actions";
@@ -19,7 +18,6 @@ import { useT } from "@/lib/i18n/provider";
  */
 export function AdminLoginForm() {
   const t = useT();
-  const router = useRouter();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
@@ -55,8 +53,11 @@ export function AdminLoginForm() {
         return;
       }
 
-      router.push("/admin");
-      router.refresh();
+      // Hard navigation (not router.push) so the proxy + server re-evaluate with
+      // the just-set session cookie — a soft nav here races the auth cookie and
+      // leaves you on the login page until a manual refresh.
+      window.location.assign("/admin");
+      return;
     } catch {
       setError(t("Couldn't reach the server. Please try again."));
     } finally {
