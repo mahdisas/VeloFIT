@@ -34,6 +34,13 @@ const METHODS = [
 // Methods that carry an external reference (account no. / transaction id / cheque no.).
 const REFERENCE_METHODS = new Set(["card", "transfer", "cheque"]);
 
+/** Local-clock "YYYY-MM-DD" (for the date input's default + max). */
+function isoToday(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 /**
  * Records a Receipt (קבלה) against an existing document — a payments row linked
  * to that document_id, with NO new accounting document. Render it keyed by the
@@ -53,8 +60,10 @@ export function LogPaymentDialog({
   onLogged: (amount: number) => void;
 }) {
   const t = useT();
+  const today = isoToday();
   const [method, setMethod] = React.useState("cash");
   const [amount, setAmount] = React.useState(String(balance));
+  const [paidAt, setPaidAt] = React.useState(today);
   const [reference, setReference] = React.useState("");
   const [pending, startTransition] = React.useTransition();
 
@@ -69,7 +78,7 @@ export function LogPaymentDialog({
       return;
     }
     startTransition(async () => {
-      const res = await logPayment(documentId, { method, amount: amt, reference: showReference ? reference : "" });
+      const res = await logPayment(documentId, { method, amount: amt, paidAt, reference: showReference ? reference : "" });
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -104,6 +113,10 @@ export function LogPaymentDialog({
 
           <Field label={t("Amount")}>
             <Input type="number" min={0} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
+          </Field>
+
+          <Field label={t("Payment date")}>
+            <Input type="date" value={paidAt} max={today} onChange={(e) => setPaidAt(e.target.value)} />
           </Field>
 
           {showReference && (
