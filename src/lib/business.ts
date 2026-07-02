@@ -24,6 +24,8 @@ export type GymIdentity = {
   name: string;
   slug: string;
   logoUrl: string | null;
+  /** Nav hrefs the platform console hid for this gym (gyms.settings.hiddenPages). */
+  hiddenPages: string[];
 };
 
 // getBusinessDetails() is a real, RLS-scoped query — see lib/business-server.ts.

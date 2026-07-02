@@ -3,18 +3,24 @@ import "server-only";
 import { getAuthedProfile } from "@/lib/dal";
 import { type BusinessDetails, type GymIdentity } from "@/lib/business";
 
-/** Name + slug + logo for the app shell (sidebar/topbar). */
+/** Name + slug + logo + hidden pages for the app shell (sidebar/topbar). */
 export async function getGymIdentity(): Promise<GymIdentity> {
   const { supabase, profile } = await getAuthedProfile();
   const { data } = await supabase
     .from("gyms")
-    .select("name, slug, logo_url")
+    .select("name, slug, logo_url, settings")
     .eq("id", profile.gymId)
     .single();
+  // Pages the platform console hid for this gym (see lib/navigation HIDEABLE_NAV).
+  const settings = (data?.settings ?? {}) as { hiddenPages?: unknown };
+  const hiddenPages = Array.isArray(settings.hiddenPages)
+    ? settings.hiddenPages.filter((p): p is string => typeof p === "string")
+    : [];
   return {
     name: data?.name ?? "",
     slug: data?.slug ?? "",
     logoUrl: data?.logo_url ?? null,
+    hiddenPages,
   };
 }
 

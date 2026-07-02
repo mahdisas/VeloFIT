@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { staffEmail } from "@/lib/auth";
+import { HIDEABLE_NAV } from "@/lib/navigation";
 import { getPlatformAdmin } from "@/lib/platform-admin";
 
 /**
@@ -81,6 +82,8 @@ export async function listGyms(): Promise<GymRow[]> {
 export type GymDetail = {
   id: string; name: string; code: string; isActive: boolean;
   messagesBalance: number; createdAt: string;
+  /** Nav hrefs hidden from this gym's Control Panel (gyms.settings.hiddenPages). */
+  hiddenPages: string[];
 };
 export type GymUser = {
   id: string; username: string; fullName: string; role: string; isActive: boolean; isArchived: boolean;
@@ -91,11 +94,17 @@ export async function getGymDetail(gymId: string): Promise<{ gym: GymDetail; use
 
   const { data: g } = await admin
     .from("gyms")
-    .select("id, name, slug, is_active, messages_balance, created_at")
+    .select("id, name, slug, is_active, messages_balance, created_at, settings")
     .eq("id", gymId)
     .maybeSingle();
   if (!g) return null;
-  const gg = g as { id: string; name: string; slug: string; is_active: boolean; messages_balance: number; created_at: string };
+  const gg = g as {
+    id: string; name: string; slug: string; is_active: boolean; messages_balance: number; created_at: string;
+    settings: { hiddenPages?: unknown } | null;
+  };
+  const hiddenPages = Array.isArray(gg.settings?.hiddenPages)
+    ? (gg.settings!.hiddenPages as unknown[]).filter((p): p is string => typeof p === "string")
+    : [];
 
   const { data: us } = await admin
     .from("profiles")
@@ -114,9 +123,44 @@ export async function getGymDetail(gymId: string): Promise<{ gym: GymDetail; use
     gym: {
       id: gg.id, name: gg.name, code: gg.slug, isActive: gg.is_active,
       messagesBalance: Number(gg.messages_balance ?? 0), createdAt: gg.created_at,
+      hiddenPages,
     },
     users,
   };
+}
+
+// ── Page visibility ──────────────────────────────────────────────────────────
+
+/**
+ * Hide/unhide one Control Panel section for a gym. The hidden hrefs live in
+ * gyms.settings.hiddenPages (the established per-gym config store — no schema
+ * change); the gym's sidebar filters on them. Only hrefs from HIDEABLE_NAV are
+ * accepted, so core pages (Dashboard, Settings) can never be hidden.
+ */
+export async function setGymPageHidden(gymId: string, href: string, hidden: boolean): Promise<ActionResult> {
+  const { admin } = await getPlatformAdmin();
+  if (!HIDEABLE_NAV.some((p) => p.href === href)) {
+    return { ok: false, error: "This page can't be hidden." };
+  }
+
+  // Read-modify-write of the settings JSON so sibling keys (business profile,
+  // classes config, …) are preserved.
+  const { data: gym } = await admin.from("gyms").select("settings").eq("id", gymId).maybeSingle();
+  if (!gym) return { ok: false, error: "Gym not found." };
+  const settings = ((gym as { settings: Record<string, unknown> | null }).settings ?? {}) as Record<string, unknown>;
+  const current = Array.isArray(settings.hiddenPages)
+    ? (settings.hiddenPages as unknown[]).filter((p): p is string => typeof p === "string")
+    : [];
+
+  const next = hidden ? [...new Set([...current, href])] : current.filter((p) => p !== href);
+  const { error } = await admin
+    .from("gyms")
+    .update({ settings: { ...settings, hiddenPages: next } })
+    .eq("id", gymId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/admin/gyms/${gymId}`);
+  return { ok: true, id: gymId };
 }
 
 // ── Gym create / update ───────────────────────────────────────────────────────

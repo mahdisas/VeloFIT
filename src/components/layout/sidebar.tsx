@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown } from "lucide-react";
@@ -39,6 +40,13 @@ type SidebarProps = {
 
 export function Sidebar({ gym, collapsed = false, onNavigate }: SidebarProps) {
   const pathname = usePathname();
+
+  // Per-gym page visibility: the platform console can hide sections a gym
+  // doesn't need (gyms.settings.hiddenPages). Decluttering, not security.
+  const navItems = React.useMemo(
+    () => NAV_ITEMS.filter((i) => !gym.hiddenPages.includes(i.href)),
+    [gym.hiddenPages]
+  );
 
   return (
     <aside
@@ -88,7 +96,7 @@ export function Sidebar({ gym, collapsed = false, onNavigate }: SidebarProps) {
       {/* Navigation */}
       <ScrollArea className="min-h-0 flex-1">
         <nav className={cn("flex flex-col gap-0.5 py-3", collapsed ? "px-3" : "px-3")}>
-          {NAV_ITEMS.map((item) =>
+          {navItems.map((item) =>
             item.children ? (
               <SidebarGroup
                 key={item.href}

@@ -1256,4 +1256,8 @@ export const ar: Dictionary = {
   "Upcoming client birthdays — a reason to reach out.": "أعياد ميلاد العملاء القادمة — سبب للتواصل معهم.",
   "Payments received": "المدفوعات المستلمة",
   "Signing out…": "جارٍ تسجيل الخروج…",
+  Pages: "الصفحات",
+  "Choose which sections this gym sees in its Control Panel.": "اختر الأقسام التي يراها هذا النادي في لوحة التحكم.",
+  "{page} is now visible": "{page} أصبح ظاهرًا",
+  "{page} is now hidden": "{page} أصبح مخفيًا",
 };

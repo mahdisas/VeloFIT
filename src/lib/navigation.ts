@@ -103,3 +103,17 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
 ];
+
+/**
+ * Per-gym page visibility (platform console → gym → Pages). The operator can
+ * hide any top-level section a gym doesn't need; the hidden hrefs live in
+ * gyms.settings.hiddenPages and the sidebar filters on them. Dashboard and
+ * Settings are locked so a gym can never lose its home or its own controls.
+ * NOTE: this is decluttering, not a security boundary — direct URLs still work.
+ */
+export const LOCKED_NAV_HREFS = new Set(["/dashboard", "/settings"]);
+
+/** The sections the platform console may hide, as { href, title } pairs. */
+export const HIDEABLE_NAV: { href: string; title: string }[] = NAV_ITEMS.filter(
+  (i) => !LOCKED_NAV_HREFS.has(i.href)
+).map((i) => ({ href: i.href, title: i.title }));

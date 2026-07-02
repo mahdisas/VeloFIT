@@ -5,6 +5,7 @@ import { ChevronLeft } from "lucide-react";
 import { getDocCounters, getGymDetail } from "@/app/admin/actions";
 import { GymEditForm } from "@/components/admin/gym-edit-form";
 import { GymNumberingCard } from "@/components/admin/gym-numbering-card";
+import { GymPagesCard } from "@/components/admin/gym-pages-card";
 import { GymUsersPanel } from "@/components/admin/gym-users-panel";
 import { getT } from "@/lib/i18n/server";
 
@@ -29,6 +30,7 @@ export default async function AdminGymDetailPage({ params }: { params: Promise<{
       </div>
 
       <GymEditForm gym={data.gym} />
+      <GymPagesCard gymId={data.gym.id} hiddenPages={data.gym.hiddenPages} />
       <GymNumberingCard gymId={data.gym.id} counters={counters} />
       <GymUsersPanel gymId={data.gym.id} users={data.users} />
     </div>
