@@ -244,7 +244,9 @@ export async function enrollClientInSession(sessionId: string, clientId: string)
       .single();
 
     if (error) {
-      // enforce_session_capacity(): errcode check_violation (23514) "… is full".
+      // Staff bypass the capacity trigger (migration 00021 — deliberate
+      // overbooking is allowed from the dashboard), so 23514 can only occur on
+      // a DB that hasn't applied it yet. Kept as a graceful fallback.
       if (error.code === "23514" && /is full/i.test(error.message)) {
         return { success: false, error: "SESSION_FULL", message: "This session has reached its maximum capacity." };
       }
@@ -267,8 +269,9 @@ export async function enrollClientInSession(sessionId: string, clientId: string)
 
 /**
  * Move an existing enrollment to a new status — powers Cancel (→ canceled) and
- * Approve/Promote (→ booked). Re-booking also passes through the capacity trigger,
- * so it can return SESSION_FULL too.
+ * Approve/Promote (→ booked). Staff bypass the capacity trigger (00021), so
+ * approving over a full class succeeds by design; SESSION_FULL remains only as
+ * a pre-migration fallback.
  */
 export async function setEnrollmentStatus(enrollmentId: string, status: RosterStatus): Promise<EnrollResult> {
   const { supabase, profile } = await getAuthedProfile();

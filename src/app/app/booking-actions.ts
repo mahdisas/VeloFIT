@@ -344,7 +344,9 @@ export type ReserveResult =
  * Reserve the member's own spot in a session. Re-derives group eligibility, then
  * tries a 'booked' enrollment; if the capacity trigger fires (errcode 23514),
  * falls back to 'waitlisted' when the class allows it. The DB trigger remains the
- * authoritative, race-safe capacity guard.
+ * authoritative, race-safe capacity guard — and it stays STRICT on this path:
+ * member bookings run on the service role, which the trigger does not exempt
+ * (only authenticated staff bypass capacity — migration 00021).
  */
 export async function reserveSpot(sessionId: string): Promise<ReserveResult> {
   const viewer = await getAppViewer();
