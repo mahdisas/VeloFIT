@@ -89,7 +89,7 @@ export async function getDashboardData(): Promise<DashboardData> {
   const start14 = new Date(now);
   start14.setDate(start14.getDate() - 13);
 
-  const [subsRes, attendRes, docsRes, paymentsRes, expiringRes, recentRes] = await Promise.all([
+  const [subsRes, attendRes, docsRes, paymentsRes, paidDocsRes, expiringRes, recentRes] = await Promise.all([
     supabase
       .from("subscriptions")
       .select("start_date, end_date, status, classes_used, plan:subscription_plans(period_months, is_class_plan, classes_limit, group:class_groups(name))")
@@ -101,10 +101,13 @@ export async function getDashboardData(): Promise<DashboardData> {
       .gte("checked_in_at", `${isoDate(start14)}T00:00:00`),
     supabase
       .from("accounting_documents")
-      .select("doc_type, total, issued_on")
+      .select("id, doc_type, total, issued_on")
       .eq("gym_id", gymId)
       .gte("issued_on", sixStart),
-    supabase.from("payments").select("amount").eq("gym_id", gymId).gte("paid_at", `${sixStart}T00:00:00`),
+    supabase.from("payments").select("amount, paid_at").eq("gym_id", gymId).gte("paid_at", `${sixStart}T00:00:00`),
+    // Which documents are payment-backed (any linked payment, any date — payment
+    // dates can be backdated, so this is deliberately not window-bounded).
+    supabase.from("payments").select("document_id").eq("gym_id", gymId).not("document_id", "is", null),
     supabase
       .from("subscriptions")
       .select("id, status, start_date, end_date, client:clients(id, full_name)")
@@ -121,7 +124,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       .limit(8),
   ]);
 
-  for (const r of [subsRes, attendRes, docsRes, paymentsRes, expiringRes, recentRes]) {
+  for (const r of [subsRes, attendRes, docsRes, paymentsRes, paidDocsRes, expiringRes, recentRes]) {
     if (r.error) throw new Error(`Failed to load dashboard data: ${r.error.message}`);
   }
 
@@ -148,11 +151,25 @@ export async function getDashboardData(): Promise<DashboardData> {
     entrancesSpark.push({ value: attendByDay.get(isoDate(d)) ?? 0 });
   }
 
-  // ── Finance: receipts/invoices from documents, debits from payments ─────────
-  const docs = (docsRes.data ?? []) as { doc_type: string; total: number; issued_on: string }[];
-  const totalReceipts = docs.filter((d) => RECEIPT_TYPES.includes(d.doc_type)).reduce((s, d) => s + Number(d.total), 0);
-  const totalInvoices = docs.filter((d) => INVOICE_TYPES.includes(d.doc_type)).reduce((s, d) => s + Number(d.total), 0);
-  const totalDebits = ((paymentsRes.data ?? []) as { amount: number }[]).reduce((s, p) => s + Number(p.amount), 0);
+  // ── Finance ──────────────────────────────────────────────────────────────────
+  // Money semantics (aligned with the Finance reports, migration 00019):
+  //   • Total Receipts  = PAYMENT-BACKED receipt-type documents in the window —
+  //     the same rule as the Finance Document report's receipts card, so the two
+  //     agree in definition (they can still differ by date window).
+  //   • Total Invoices  = payment-backed invoice-type documents — an issued-but-
+  //     unpaid invoice is billing, not revenue, and is excluded.
+  //   • Payments received ("debits") = every payment in the window (cash in) —
+  //     ties out with the Finance Payments report and the revenue chart.
+  const docs = (docsRes.data ?? []) as { id: string; doc_type: string; total: number; issued_on: string }[];
+  const payments = (paymentsRes.data ?? []) as { amount: number; paid_at: string }[];
+  const paidDocIds = new Set(
+    ((paidDocsRes.data ?? []) as { document_id: string }[]).map((p) => p.document_id)
+  );
+  const paidDocs = docs.filter((d) => paidDocIds.has(d.id));
+
+  const totalReceipts = paidDocs.filter((d) => RECEIPT_TYPES.includes(d.doc_type)).reduce((s, d) => s + Number(d.total), 0);
+  const totalInvoices = paidDocs.filter((d) => INVOICE_TYPES.includes(d.doc_type)).reduce((s, d) => s + Number(d.total), 0);
+  const totalDebits = payments.reduce((s, p) => s + Number(p.amount), 0);
 
   const metrics: DashboardMetrics = {
     activeSubscriptions: activeSubs.length,
@@ -169,13 +186,20 @@ export async function getDashboardData(): Promise<DashboardData> {
     },
   };
 
-  // ── Revenue 6 months (receipts vs invoices) ─────────────────────────────────
+  // ── Revenue 6 months ─────────────────────────────────────────────────────────
+  // "Receipts" charts REAL revenue: every payment received, bucketed by the month
+  // the money came in (paid_at) — a late payment lands in the month it arrived.
+  // "Invoices" charts payment-backed invoice documents by issue month, for
+  // billed-vs-collected comparison. Unpaid invoices appear in neither series.
   const revByMonth = new Map(months.map((m) => [m, { receipts: 0, invoices: 0 }]));
-  for (const d of docs) {
+  for (const p of payments) {
+    const bucket = revByMonth.get(monthKey(p.paid_at.slice(0, 10)));
+    if (bucket) bucket.receipts += Number(p.amount);
+  }
+  for (const d of paidDocs) {
+    if (!INVOICE_TYPES.includes(d.doc_type)) continue;
     const bucket = revByMonth.get(monthKey(d.issued_on));
-    if (!bucket) continue;
-    if (RECEIPT_TYPES.includes(d.doc_type)) bucket.receipts += Number(d.total);
-    if (INVOICE_TYPES.includes(d.doc_type)) bucket.invoices += Number(d.total);
+    if (bucket) bucket.invoices += Number(d.total);
   }
   const revenue: RevenuePoint[] = months.map((m) => ({ month: m, ...revByMonth.get(m)! }));
 

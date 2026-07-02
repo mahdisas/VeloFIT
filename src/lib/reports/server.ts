@@ -323,6 +323,9 @@ export type FinanceDocsParams = {
   dir?: "asc" | "desc";
   page?: number;
   pageSize?: number;
+  /** true = exclude unpaid documents (positive total, no linked payment) — the
+   *  Finance Document report; false = the full creation log. */
+  paidOnly?: boolean;
 };
 export type FinanceDocsResult = {
   rows: FinanceDocument[];
@@ -341,7 +344,7 @@ export async function getFinanceDocuments(params: FinanceDocsParams = {}): Promi
   const pageSize = Math.max(1, params.pageSize ?? 10);
   const page = Math.max(1, params.page ?? 1);
 
-  const { data, error } = await supabase.rpc("report_finance_documents", {
+  const baseArgs = {
     p_search: params.search ?? "",
     p_doc_types: params.docTypes ?? null,
     p_from: params.from || null,
@@ -350,7 +353,17 @@ export async function getFinanceDocuments(params: FinanceDocsParams = {}): Promi
     p_dir: params.dir === "asc" ? "asc" : "desc",
     p_limit: pageSize,
     p_offset: (page - 1) * pageSize,
+  };
+  let { data, error } = await supabase.rpc("report_finance_documents", {
+    ...baseArgs,
+    p_paid_only: params.paidOnly ?? false,
   });
+  // Best-effort until migration 00019 is applied: an old DB only has the 8-arg
+  // signature (no p_paid_only), so retry without it rather than breaking the
+  // report. Behavior is then the pre-00019 one (unpaid documents included).
+  if (error && /could not find the function/i.test(error.message)) {
+    ({ data, error } = await supabase.rpc("report_finance_documents", baseArgs));
+  }
   if (error) throw new Error(`Failed to load finance documents: ${error.message}`);
 
   const res = (data ?? {}) as {

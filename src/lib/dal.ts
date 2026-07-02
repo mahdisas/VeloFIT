@@ -55,20 +55,21 @@ export const getAuthedProfile = cache(async function getAuthedProfile(): Promise
   }
   if (!user) redirect("/login");
 
+  // One round-trip: the profile plus the gym's suspension flag (join, not a
+  // second query — this runs on EVERY server request). Requires migration 00018
+  // (gyms.is_active).
   const { data, error } = await supabase
     .from("profiles")
-    .select("gym_id, role, full_name, permissions")
+    .select("gym_id, role, full_name, permissions, gym:gyms(is_active)")
     .eq("id", user.id)
     .single();
 
   // Authenticated but no profile row → not linked to any gym; treat as logged out.
   if (error || !data) redirect("/login");
 
-  // Suspended-gym gate. Best-effort: a DB without gyms.is_active (migration 00018
-  // not applied yet) returns no row and is treated as active, so it never locks
-  // anyone out prematurely.
-  const { data: gymState } = await supabase.from("gyms").select("is_active").eq("id", data.gym_id).maybeSingle();
-  if (gymState && (gymState as { is_active: boolean }).is_active === false) redirect("/login");
+  // Suspended-gym gate: nobody in a suspended gym can use the app.
+  const gym = data.gym as unknown as { is_active: boolean } | null;
+  if (gym && gym.is_active === false) redirect("/login");
 
   return {
     supabase,

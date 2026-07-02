@@ -2,16 +2,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 
-import { getGymDetail } from "@/app/admin/actions";
+import { getDocCounters, getGymDetail } from "@/app/admin/actions";
 import { GymEditForm } from "@/components/admin/gym-edit-form";
+import { GymNumberingCard } from "@/components/admin/gym-numbering-card";
 import { GymUsersPanel } from "@/components/admin/gym-users-panel";
 import { getT } from "@/lib/i18n/server";
 
-/** Admin · one gym — editable details + user management. */
+/** Admin · one gym — editable details, invoice numbering, and user management. */
 export default async function AdminGymDetailPage({ params }: { params: Promise<{ gymId: string }> }) {
   const { gymId } = await params;
   const t = await getT();
-  const data = await getGymDetail(gymId);
+  const [data, counters] = await Promise.all([getGymDetail(gymId), getDocCounters(gymId)]);
   if (!data) notFound();
 
   return (
@@ -28,6 +29,7 @@ export default async function AdminGymDetailPage({ params }: { params: Promise<{
       </div>
 
       <GymEditForm gym={data.gym} />
+      <GymNumberingCard gymId={data.gym.id} counters={counters} />
       <GymUsersPanel gymId={data.gym.id} users={data.users} />
     </div>
   );

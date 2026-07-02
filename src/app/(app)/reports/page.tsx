@@ -27,9 +27,10 @@ export default async function ReportsPage() {
                 <Link
                   key={report.slug}
                   href={`/reports/${report.slug}`}
-                  className="flex min-h-16 items-center justify-center rounded-lg border bg-background px-4 py-3 text-center text-sm font-medium text-foreground/90 transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:bg-accent hover:text-primary hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                  className="flex min-h-16 flex-col justify-center gap-1 rounded-lg border bg-background px-4 py-3 text-start transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none group/report hover:shadow-md"
                 >
-                  {t(report.title)}
+                  <span className="text-sm font-medium text-foreground/90 group-hover/report:text-primary">{t(report.title)}</span>
+                  <span className="text-xs leading-relaxed text-muted-foreground">{t(report.description)}</span>
                 </Link>
               ))}
             </div>

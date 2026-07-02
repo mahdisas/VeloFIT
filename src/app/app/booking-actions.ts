@@ -171,7 +171,14 @@ export async function getMemberClassDetail(sessionId: string): Promise<MemberCla
   const trainerId = s.trainer_id ?? s.class?.trainer_id ?? null;
   let trainerName = "";
   if (trainerId) {
-    const { data: tr } = await viewer.supabase.from("trainers").select("full_name").eq("id", trainerId).maybeSingle();
+    // gym filter: service-role reads must always be tenant-scoped, even when the
+    // id already came from a gym-scoped row (defense in depth).
+    const { data: tr } = await viewer.supabase
+      .from("trainers")
+      .select("full_name")
+      .eq("id", trainerId)
+      .eq("gym_id", viewer.gymId)
+      .maybeSingle();
     trainerName = (tr as { full_name: string } | null)?.full_name ?? "";
   }
 

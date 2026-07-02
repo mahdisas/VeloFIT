@@ -16,11 +16,14 @@ import { CHART_COLORS, type RevenuePoint } from "@/lib/dashboard";
 import { useT } from "@/lib/i18n/provider";
 
 const SERIES = [
-  { key: "receipts", name: "Receipts", color: CHART_COLORS.lightBlue },
+  // `receipts` carries REAL revenue: every payment received, by the month the
+  // money arrived — so the label says exactly that (not "Receipts", which is a
+  // document type; those live in the Total Receipts card).
+  { key: "receipts", name: "Payments received", color: CHART_COLORS.lightBlue },
   { key: "invoices", name: "Invoices", color: CHART_COLORS.blue },
 ] as const;
 
-/** "Revenue 6 Months" — Receipts vs Invoices as two monthly line series. */
+/** "Revenue 6 Months" — payments received vs paid invoices, per month. */
 export function RevenueChart({ data }: { data: RevenuePoint[] }) {
   const t = useT();
   // With an all-zero gym both lines sit on the baseline and overlap exactly, so

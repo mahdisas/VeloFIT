@@ -140,7 +140,9 @@ const RENDERERS: Record<string, (sp: ReportSearchParams) => Promise<React.ReactN
   // Finance
   "finance-document": async (sp) => {
     const p = docParams(sp);
-    const data = await getFinanceDocuments(p);
+    // Financial snapshot: only payment-backed documents. The full paper trail
+    // (incl. unpaid invoices + bids) lives in the Document creation report.
+    const data = await getFinanceDocuments({ ...p, paidOnly: true });
     return <DocumentReport {...data} params={p} filename="finance-document-report.csv" showInitiatedBy />;
   },
   "finance-charges": async () => <FinanceChargesReport charges={await getFinanceCharges()} />,
@@ -231,7 +233,10 @@ export default async function ReportPage({
         <span className="font-medium text-foreground">{t(report.title)}</span>
       </nav>
 
-      <h1 className="text-2xl font-bold tracking-tight">{t(report.title)}</h1>
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-2xl font-bold tracking-tight">{t(report.title)}</h1>
+        <p className="max-w-2xl text-sm text-muted-foreground">{t(report.description)}</p>
+      </div>
 
       {render ? (
         await render(sp)

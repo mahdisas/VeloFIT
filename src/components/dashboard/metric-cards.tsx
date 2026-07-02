@@ -52,8 +52,10 @@ export async function MetricCards({ metrics }: { metrics: DashboardMetrics }) {
 
       <Card>
         <CardContent>
+          {/* Every payment received in the window — matches the Finance Payments
+              report total and the chart's "Payments received" series. */}
           <MetricStat
-            title={t("Total Debits")}
+            title={t("Payments received")}
             variant="area"
             color="#3b82f6"
             data={sparklines.totalDebits}

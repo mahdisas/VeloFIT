@@ -270,6 +270,76 @@ export async function resetGymUserPassword(userId: string, password: string): Pr
   return { ok: true, id: userId };
 }
 
+// ── Document numbering ───────────────────────────────────────────────────────
+// Numbers are allocated by the assign_doc_number() trigger from
+// document_counters(gym_id, doc_type, last_number) — see migration 00004.
+// Setting a start number is just seeding that counter: last_number = next − 1.
+
+const DOC_TYPES = [
+  "tax_invoice",
+  "receipt",
+  "receipt_tax_invoice",
+  "refund",
+  "non_formal_transaction",
+  "informal",
+  "bid",
+] as const;
+export type DocType = (typeof DOC_TYPES)[number];
+
+export type DocCounter = { docType: DocType; nextNumber: number };
+
+/** The next document number each type will get for a gym (default 1). */
+export async function getDocCounters(gymId: string): Promise<DocCounter[]> {
+  const { admin } = await getPlatformAdmin();
+
+  const { data } = await admin
+    .from("document_counters")
+    .select("doc_type, last_number")
+    .eq("gym_id", gymId);
+  const lastBy = new Map(
+    ((data ?? []) as { doc_type: string; last_number: number }[]).map((r) => [r.doc_type, Number(r.last_number)])
+  );
+
+  return DOC_TYPES.map((docType) => ({ docType, nextNumber: (lastBy.get(docType) ?? 0) + 1 }));
+}
+
+/**
+ * Seed a gym's counter so the NEXT document of this type gets `nextNumber`.
+ * Raise-only: the counter can never be moved backwards, so already-issued
+ * numbers can't be handed out twice.
+ */
+export async function setDocNextNumber(gymId: string, docType: DocType, nextNumber: number): Promise<ActionResult> {
+  const { admin } = await getPlatformAdmin();
+  if (!DOC_TYPES.includes(docType)) return { ok: false, error: "Unknown document type." };
+  const next = Math.floor(nextNumber);
+  if (!Number.isFinite(next) || next < 1) return { ok: false, error: "The next number must be at least 1." };
+
+  const { data: gym } = await admin.from("gyms").select("id").eq("id", gymId).maybeSingle();
+  if (!gym) return { ok: false, error: "Gym not found." };
+
+  const { data: existing } = await admin
+    .from("document_counters")
+    .select("last_number")
+    .eq("gym_id", gymId)
+    .eq("doc_type", docType)
+    .maybeSingle();
+  const current = Number((existing as { last_number: number } | null)?.last_number ?? 0);
+  if (next - 1 < current) {
+    return { ok: false, error: `The next number can only be raised (currently ${current + 1}).` };
+  }
+
+  const { error } = await admin
+    .from("document_counters")
+    .upsert(
+      { gym_id: gymId, doc_type: docType, last_number: next - 1 },
+      { onConflict: "gym_id,doc_type" }
+    );
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/admin/gyms/${gymId}`);
+  return { ok: true, id: gymId };
+}
+
 export async function setGymUserActive(userId: string, active: boolean): Promise<ActionResult> {
   const { admin } = await getPlatformAdmin();
   const { data: prof } = await admin.from("profiles").select("gym_id").eq("id", userId).maybeSingle();
