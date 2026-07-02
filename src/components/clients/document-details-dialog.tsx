@@ -68,7 +68,9 @@ export function DocumentDetailsDialog({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      {/* Viewport-clamped (vw, not %) so the nowrap payment-history table can
+          never push the dialog past a phone screen; tall receipts scroll. */}
+      <DialogContent className="max-h-[90dvh] w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] overflow-y-auto sm:w-full sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t("Document details")}</DialogTitle>
           <DialogDescription className="sr-only">{t("Document details")}</DialogDescription>
@@ -97,7 +99,9 @@ function Receipt({
   const outstanding = details.balance > 0.005;
 
   return (
-    <div className="flex flex-col divide-y divide-border rounded-lg ring-1 ring-border">
+    // min-w-0: as a grid item of DialogContent the receipt must be allowed to
+    // shrink below the table's intrinsic width, or it drags the dialog wide.
+    <div className="flex min-w-0 flex-col divide-y divide-border rounded-lg ring-1 ring-border">
       {/* Header — type, number, date */}
       <div className="flex items-start justify-between gap-3 bg-muted/40 px-4 py-3">
         <div>
@@ -171,7 +175,7 @@ function Receipt({
         {details.payments.length === 0 ? (
           <p className="py-3 text-center text-xs text-muted-foreground">{t("No payments recorded yet.")}</p>
         ) : (
-          <div className="overflow-x-auto rounded-md ring-1 ring-border">
+          <div className="max-w-full overflow-x-auto rounded-md ring-1 ring-border">
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">

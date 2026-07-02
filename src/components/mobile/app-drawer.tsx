@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
+import { useFormStatus } from "react-dom";
 import Link from "next/link";
-import { Activity, Clock, LogOut, Menu } from "lucide-react";
+import { Activity, Clock, Loader2, LogOut, Menu } from "lucide-react";
 
 import { signOut } from "@/app/(app)/auth-actions";
 import { memberSignOut } from "@/app/login/member-actions";
@@ -80,16 +81,29 @@ export function AppDrawer({
 
         <div className="border-t p-3">
           <form action={isMember ? memberSignOut : signOut}>
-            <button
-              type="submit"
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
-            >
-              <LogOut className="size-5" />
-              {t("Log out")}
-            </button>
+            <SignOutButton label={t("Log out")} pendingLabel={t("Signing out…")} />
           </form>
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+/**
+ * The drawer's sign-out submit. Lives inside the <form> so useFormStatus can
+ * show a spinner while the server action runs — signing out isn't instant, and
+ * without feedback the button feels dead.
+ */
+function SignOutButton({ label, pendingLabel }: { label: string; pendingLabel: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-70"
+    >
+      {pending ? <Loader2 className="size-5 animate-spin" /> : <LogOut className="size-5" />}
+      {pending ? pendingLabel : label}
+    </button>
   );
 }

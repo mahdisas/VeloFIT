@@ -34,20 +34,52 @@ function topKey(counts: Map<string, number>): string | null {
 type SessionRow = { id: string; class: { kind: { name: string } | null } | null };
 type EnrollRow = { client_id: string; session_id: string; client: { full_name: string } | null };
 
+/** Transient network blips ("TypeError: fetch failed") — worth one retry. */
+const isTransient = (msg: string) => /fetch failed|network|ECONNRESET|ETIMEDOUT/i.test(msg);
+
+/**
+ * Run a Supabase read; on a transient network failure retry once. Returns the
+ * error (instead of throwing) so the caller decides how to degrade.
+ */
+async function withRetry<T>(
+  run: () => PromiseLike<{ data: T | null; error: { message: string } | null }>
+): Promise<{ data: T | null; error: { message: string } | null }> {
+  const first = await run();
+  if (first.error && isTransient(first.error.message)) return run();
+  return first;
+}
+
+const EMPTY_SUMMARY: SummaryData = {
+  totalTrainees: 0,
+  totalLessons: 0,
+  mostRequestedClass: "—",
+  mostRegisteredTrainee: "—",
+};
+
 export async function getSummary(params: SummaryParams): Promise<SummaryData> {
   const { supabase, profile } = await getAuthedProfile();
   const gymId = profile.gymId;
   const { start, end } = periodBounds(params);
 
   // Lessons held in the period (excluding cancellations) + their kind names.
-  const { data: sessionsData, error: sessionsError } = await supabase
-    .from("class_sessions")
-    .select("id, class:classes(kind:class_kinds(name))")
-    .eq("gym_id", gymId)
-    .gte("session_date", start)
-    .lte("session_date", end)
-    .neq("status", "canceled");
-  if (sessionsError) throw new Error(`Failed to load summary: ${sessionsError.message}`);
+  const { data: sessionsData, error: sessionsError } = await withRetry(() =>
+    supabase
+      .from("class_sessions")
+      .select("id, class:classes(kind:class_kinds(name))")
+      .eq("gym_id", gymId)
+      .gte("session_date", start)
+      .lte("session_date", end)
+      .neq("status", "canceled")
+  );
+  if (sessionsError) {
+    // A share-card widget should never 500 the page over a network hiccup —
+    // degrade to an empty summary for transient failures, throw for real ones.
+    if (isTransient(sessionsError.message)) {
+      console.error(`getSummary degraded (transient): ${sessionsError.message}`);
+      return EMPTY_SUMMARY;
+    }
+    throw new Error(`Failed to load summary: ${sessionsError.message}`);
+  }
 
   const sessions = (sessionsData ?? []) as unknown as SessionRow[];
   const totalLessons = sessions.length;
@@ -59,13 +91,21 @@ export async function getSummary(params: SummaryParams): Promise<SummaryData> {
 
   const sessionIds = sessions.map((s) => s.id);
   if (sessionIds.length > 0) {
-    const { data: enrollData, error: enrollError } = await supabase
-      .from("class_enrollments")
-      .select("client_id, session_id, client:clients(full_name)")
-      .eq("gym_id", gymId)
-      .in("session_id", sessionIds)
-      .in("status", ["booked", "attended"]);
-    if (enrollError) throw new Error(`Failed to load summary: ${enrollError.message}`);
+    const { data: enrollData, error: enrollError } = await withRetry(() =>
+      supabase
+        .from("class_enrollments")
+        .select("client_id, session_id, client:clients(full_name)")
+        .eq("gym_id", gymId)
+        .in("session_id", sessionIds)
+        .in("status", ["booked", "attended"])
+    );
+    if (enrollError) {
+      if (isTransient(enrollError.message)) {
+        console.error(`getSummary degraded (transient): ${enrollError.message}`);
+        return { ...EMPTY_SUMMARY, totalLessons };
+      }
+      throw new Error(`Failed to load summary: ${enrollError.message}`);
+    }
 
     const enrollments = (enrollData ?? []) as unknown as EnrollRow[];
     totalTrainees = new Set(enrollments.map((e) => e.client_id)).size;

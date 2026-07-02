@@ -322,8 +322,11 @@ const DOC_TYPE_MAP: Record<string, string> = {
   bid: "bid",
   non_formal_transaction: "non_formal_transaction",
 };
-// Which UI document types take money (and so write a payment row).
-const DOC_HAS_PAYMENT = new Set(["receipt_tax_invoice", "receipt", "informal"]);
+// Which UI document types take money (and so write a payment row). A tax
+// invoice CAN be paid on the spot (e.g. New Subscription → Payment Options with
+// Tax invoice selected) — without it here that payment was silently dropped and
+// the document showed Paid: 0. An unpaid tax invoice simply sends no payment.
+const DOC_HAS_PAYMENT = new Set(["tax_invoice", "receipt_tax_invoice", "receipt", "informal"]);
 
 // Document types that legally carry VAT (keyed by the document_type enum). VAT is
 // computed tax-INCLUSIVE: the amount entered already includes it, matching the
