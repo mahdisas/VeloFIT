@@ -20,7 +20,7 @@ export function MobileMembership({ packages }: { packages: SubscriptionPackage[]
   }
 
   return (
-    <div className="flex flex-col gap-3 p-4">
+    <div className="flex flex-col gap-3 px-4 py-5">
       {packages.map((p) => {
         const period = p.isClassPlan
           ? `${p.classesLimit ?? 0} ${t("Classes")}`

@@ -43,7 +43,7 @@ export function MobileProducts({ products }: { products: Product[] }) {
   }
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className="flex flex-col gap-4 px-4 py-5">
       {/* Filter + sort row */}
       <div className="flex gap-2">
         <Select value={category} onValueChange={setCategory}>

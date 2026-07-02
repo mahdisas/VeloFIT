@@ -52,9 +52,9 @@ export function MobileAttendanceFeed({ entries }: { entries: AttendanceEntry[] }
   }
 
   return (
-    <div className="flex flex-col gap-5 p-4">
+    <div className="flex flex-col gap-6 px-4 py-5">
       {groups.map((g) => (
-        <section key={g.key} className="flex flex-col gap-2">
+        <section key={g.key} className="flex flex-col gap-2.5">
           <h2 className="px-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground" dir="auto">
             {g.label}
           </h2>

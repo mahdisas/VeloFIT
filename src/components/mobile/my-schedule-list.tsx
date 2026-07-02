@@ -42,9 +42,9 @@ export function MemberBookingList({ classes, emptyKey }: { classes: MyClass[]; e
   }
 
   return (
-    <div className="flex flex-col gap-5 p-4">
+    <div className="flex flex-col gap-6 px-4 py-5">
       {groups.map(([date, list]) => (
-        <section key={date} className="flex flex-col gap-2">
+        <section key={date} className="flex flex-col gap-2.5">
           <h2 className="px-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {dateFmt.format(fromISO(date))}
           </h2>

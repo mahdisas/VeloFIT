@@ -45,7 +45,7 @@ export function MobileProfile({
   };
 
   return (
-    <div className="flex min-h-full flex-col gap-6 p-4">
+    <div className="flex min-h-full flex-col gap-7 px-4 py-6">
       {/* Avatar */}
       <div className="flex justify-center pt-4">
         <Avatar className="size-28 ring-4 ring-primary/10">
@@ -57,7 +57,7 @@ export function MobileProfile({
       </div>
 
       {/* Details — Name + Phone */}
-      <section className="flex flex-col gap-2">
+      <section className="flex flex-col gap-2.5">
         <h2 className="text-sm font-semibold">{t("Details")}</h2>
         <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
           <DetailRow icon={<User className="size-5" />} label={t("Name")} value={profile.fullName} valueDir="auto" />
@@ -69,7 +69,7 @@ export function MobileProfile({
 
       {/* Members: their memberships · Staff: the gym's details */}
       {isMember ? (
-        <section className="flex flex-col gap-2">
+        <section className="flex flex-col gap-2.5">
           <h2 className="text-sm font-semibold">{t("Subscriptions")}</h2>
           {subscriptions.length === 0 ? (
             <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -81,7 +81,7 @@ export function MobileProfile({
         </section>
       ) : (
         gym && (
-          <section className="flex flex-col gap-2">
+          <section className="flex flex-col gap-2.5">
             <h2 className="text-sm font-semibold">{t("Gym details")}</h2>
             <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
               <DetailRow icon={<Building2 className="size-5" />} label={t("Name")} value={gym.name} valueDir="auto" />
@@ -95,7 +95,7 @@ export function MobileProfile({
       )}
 
       {/* Language — pinned to the bottom */}
-      <section className="mt-auto flex flex-col gap-2 pt-2">
+      <section className="mt-auto flex flex-col gap-2.5 pt-2">
         <h2 className="text-sm font-semibold">{t("Language")}</h2>
         <div className="flex gap-2">
           {LOCALES.map((locale) => {

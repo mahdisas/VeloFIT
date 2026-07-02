@@ -68,7 +68,7 @@ export function MobileDashboard({
   const fmtToday = new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
   return (
-    <div className="flex flex-col gap-5 p-4">
+    <div className="flex flex-col gap-6 px-4 py-5">
       <header>
         <h1 className="font-heading text-2xl font-bold" dir="auto">
           {t(greeting)}{fname ? `, ${fname}` : ""}
@@ -76,7 +76,7 @@ export function MobileDashboard({
         <p className="text-sm capitalize text-muted-foreground">{fmtToday.format(now)}</p>
       </header>
 
-      <section className="flex flex-col gap-2">
+      <section className="flex flex-col gap-2.5">
         <h2 className="text-sm font-semibold">{t("Next class")}</h2>
         {next ? (
           <div className="rounded-2xl border bg-card p-4 shadow-sm">
@@ -103,7 +103,7 @@ export function MobileDashboard({
       </section>
 
       {isMember ? (
-        <section className="flex flex-col gap-2">
+        <section className="flex flex-col gap-2.5">
           <h2 className="text-sm font-semibold">{t("Subscriptions")}</h2>
           {subscriptions.length === 0 ? (
             <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -114,7 +114,7 @@ export function MobileDashboard({
           )}
         </section>
       ) : (
-        <section className="flex flex-col gap-2">
+        <section className="flex flex-col gap-2.5">
           <h2 className="text-sm font-semibold">{t("Active subscriptions")}</h2>
           <div className="flex items-center gap-4 rounded-2xl border bg-card p-4 shadow-sm">
             <div className="grid size-12 shrink-0 place-content-center rounded-2xl bg-primary/10 text-primary">
