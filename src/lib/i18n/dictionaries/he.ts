@@ -1225,7 +1225,7 @@ export const he: Dictionary = {
   "Sign in to manage all gyms.": "התחבר לניהול כל המכונים.",
   "This account isn't a platform admin.": "חשבון זה אינו מנהל פלטפורמה.",
   "Document numbering": "מספור מסמכים",
-  "The number the next document of each type will receive. Can only be raised.": "המספר שיקבל המסמך הבא מכל סוג. ניתן להעלות בלבד.",
+  "The number the next document of each type will receive. It must stay above every number already issued.": "המספר שיקבל המסמך הבא מכל סוג. חייב להישאר מעל כל מספר שכבר הונפק.",
   "The next number must be at least 1.": "המספר הבא חייב להיות לפחות 1.",
   "Numbering updated": "המספור עודכן",
   Set: "קבע",

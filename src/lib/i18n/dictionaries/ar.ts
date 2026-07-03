@@ -1225,7 +1225,7 @@ export const ar: Dictionary = {
   "Sign in to manage all gyms.": "سجّل الدخول لإدارة جميع الأندية.",
   "This account isn't a platform admin.": "هذا الحساب ليس مسؤول منصة.",
   "Document numbering": "ترقيم المستندات",
-  "The number the next document of each type will receive. Can only be raised.": "الرقم الذي سيحصل عليه المستند التالي من كل نوع. يمكن رفعه فقط.",
+  "The number the next document of each type will receive. It must stay above every number already issued.": "الرقم الذي سيحصل عليه المستند التالي من كل نوع. يجب أن يبقى أعلى من أي رقم صدر بالفعل.",
   "The next number must be at least 1.": "يجب أن يكون الرقم التالي 1 على الأقل.",
   "Numbering updated": "تم تحديث الترقيم",
   Set: "تعيين",

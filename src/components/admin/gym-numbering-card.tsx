@@ -24,8 +24,9 @@ const TYPE_LABEL: Record<DocType, string> = {
 
 /**
  * Admin · per-gym invoice sequencing. Each document type shows the number its
- * NEXT document will get; typing a new value seeds the gapless counter (raise-
- * only — the server rejects lowering, so issued numbers can't repeat).
+ * NEXT document will get; typing a new value seeds the gapless counter. The
+ * server allows raising AND lowering, but never at/below a number that's
+ * already on an issued document — so numbers can't repeat.
  */
 export function GymNumberingCard({ gymId, counters }: { gymId: string; counters: DocCounter[] }) {
   const t = useT();
@@ -35,7 +36,7 @@ export function GymNumberingCard({ gymId, counters }: { gymId: string; counters:
       <div>
         <h2 className="text-sm font-semibold">{t("Document numbering")}</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          {t("The number the next document of each type will receive. Can only be raised.")}
+          {t("The number the next document of each type will receive. It must stay above every number already issued.")}
         </p>
       </div>
 

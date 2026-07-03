@@ -349,8 +349,9 @@ export async function getDocCounters(gymId: string): Promise<DocCounter[]> {
 
 /**
  * Seed a gym's counter so the NEXT document of this type gets `nextNumber`.
- * Raise-only: the counter can never be moved backwards, so already-issued
- * numbers can't be handed out twice.
+ * Lowering is allowed as long as it stays ABOVE every number already issued for
+ * this gym+type — that's the actual collision constraint (a mistyped start can
+ * be corrected freely while no documents exist yet).
  */
 export async function setDocNextNumber(gymId: string, docType: DocType, nextNumber: number): Promise<ActionResult> {
   const { admin } = await getPlatformAdmin();
@@ -361,15 +362,19 @@ export async function setDocNextNumber(gymId: string, docType: DocType, nextNumb
   const { data: gym } = await admin.from("gyms").select("id").eq("id", gymId).maybeSingle();
   if (!gym) return { ok: false, error: "Gym not found." };
 
-  const { data: existing } = await admin
-    .from("document_counters")
-    .select("last_number")
+  // doc_number is text of an integer (the trigger writes v_next::text), so the
+  // max has to be computed after parsing — text ordering would say "9" > "10".
+  const { data: docs } = await admin
+    .from("accounting_documents")
+    .select("doc_number")
     .eq("gym_id", gymId)
-    .eq("doc_type", docType)
-    .maybeSingle();
-  const current = Number((existing as { last_number: number } | null)?.last_number ?? 0);
-  if (next - 1 < current) {
-    return { ok: false, error: `The next number can only be raised (currently ${current + 1}).` };
+    .eq("doc_type", docType);
+  const maxIssued = Math.max(
+    0,
+    ...((docs ?? []) as { doc_number: string | null }[]).map((d) => parseInt(d.doc_number ?? "0", 10) || 0)
+  );
+  if (next <= maxIssued) {
+    return { ok: false, error: `Number ${next} is already used — this gym's highest ${docType.replace(/_/g, " ")} is ${maxIssued}, so the next number must be at least ${maxIssued + 1}.` };
   }
 
   const { error } = await admin
