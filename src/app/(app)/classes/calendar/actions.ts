@@ -432,16 +432,23 @@ export async function toggleAttendance(enrollmentId: string, isAttending: boolea
   const { supabase, profile } = await getAuthedProfile();
   const gymId = profile.gymId;
 
+  // One round trip: flip the status AND pull the session's date/time via the
+  // join — the front desk taps these checkboxes rapid-fire, so every saved
+  // round trip is felt directly in the UI.
   const { data, error } = await supabase
     .from("class_enrollments")
     .update({ status: isAttending ? "attended" : "booked" })
     .eq("id", enrollmentId)
     .eq("gym_id", gymId)
-    .select("session_id, client_id")
+    .select("session_id, client_id, session:class_sessions(session_date, start_time)")
     .single();
 
   if (error) return { success: false, message: error.message };
-  const { session_id, client_id } = data as { session_id: string; client_id: string };
+  const { session_id, client_id, session } = data as unknown as {
+    session_id: string;
+    client_id: string;
+    session: { session_date: string; start_time: string } | null;
+  };
 
   if (isAttending) {
     // Stamp the entrance at the session's start time (avoid duplicating it).
@@ -454,26 +461,19 @@ export async function toggleAttendance(enrollmentId: string, isAttending: boolea
       .limit(1)
       .maybeSingle();
     if (!existing) {
-      const { data: s } = await supabase
-        .from("class_sessions")
-        .select("session_date, start_time")
-        .eq("id", session_id)
-        .eq("gym_id", gymId)
-        .maybeSingle();
-      const sess = s as { session_date: string; start_time: string } | null;
       // Stamp at the class start time (local wall-clock) so "Last Entrance" reads as the class time.
-      const checkedInAt = sess
+      const checkedInAt = session
         ? (() => {
-            const [y, m, d] = sess.session_date.split("-").map(Number);
-            const [hh, mm, ss] = sess.start_time.split(":").map(Number);
+            const [y, m, d] = session.session_date.split("-").map(Number);
+            const [hh, mm, ss] = session.start_time.split(":").map(Number);
             return new Date(y, m - 1, d, hh, mm, ss || 0).toISOString();
           })()
         : new Date().toISOString();
-      await supabase
-        .from("attendances")
-        .insert({ gym_id: gymId, client_id, session_id, checked_in_at: checkedInAt });
-      // Punch card: a newly-attended class consumes one credit on an active pass.
-      await consumeClassPass(supabase, gymId, client_id, +1);
+      // The entrance log and the punch-card credit are independent — run both at once.
+      await Promise.all([
+        supabase.from("attendances").insert({ gym_id: gymId, client_id, session_id, checked_in_at: checkedInAt }),
+        consumeClassPass(supabase, gymId, client_id, +1),
+      ]);
     }
   } else {
     const { data: removed } = await supabase

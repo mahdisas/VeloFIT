@@ -108,7 +108,24 @@ function Body({
   const t = useT();
   const [roster, setRoster] = React.useState<RosterMember[]>([]);
   const [loading, setLoading] = React.useState(true);
+  // Cancel-class is the only whole-sheet operation; everything else is per-row.
   const [pending, startTransition] = React.useTransition();
+
+  // Per-row in-flight tracking. A shared useTransition made ONE toggle disable
+  // every checkbox (and React 19 queues async transitions sequentially), so the
+  // front desk couldn't mark the next client until the previous round trip
+  // finished. Each row now locks only itself; different rows run in parallel.
+  const [busyIds, setBusyIds] = React.useState<Set<string>>(new Set());
+  const setBusy = (id: string, on: boolean) =>
+    setBusyIds((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  // Optimistic enrolls carry a temp id until the server returns the real one —
+  // their row controls must stay locked (the server doesn't know the temp id).
+  const rowBusy = (id: string) => busyIds.has(id) || id.startsWith("temp-");
 
   // Load the live roster whenever the opened session changes.
   React.useEffect(() => {
@@ -140,7 +157,7 @@ function Body({
     setRoster((prev) => [...prev, temp]);
     adjustEnrolled(session.id, +1);
 
-    startTransition(async () => {
+    void (async () => {
       const result = await enrollClientInSession(session.id, client.id);
       if (!result.success) {
         setRoster((prev) => prev.filter((m) => m.enrollmentId !== temp.enrollmentId));
@@ -150,18 +167,19 @@ function Body({
       }
       setRoster((prev) => prev.map((m) => (m.enrollmentId === temp.enrollmentId ? result.member : m)));
       toast.success(t("{name} added", { name: client.name }));
-    });
+    })();
   };
 
   /** Remove an enrollment — optimistic move to rejected (canceled), − the count. */
   const handleRemove = (member: RosterMember) => {
     const previous = member.status;
+    setBusy(member.enrollmentId, true);
     setRoster((prev) =>
       prev.map((m) => (m.enrollmentId === member.enrollmentId ? { ...m, status: "canceled" } : m))
     );
     adjustEnrolled(session.id, -1);
 
-    startTransition(async () => {
+    void (async () => {
       const result = await setEnrollmentStatus(member.enrollmentId, "canceled");
       if (!result.success) {
         setRoster((prev) =>
@@ -169,21 +187,23 @@ function Body({
         );
         adjustEnrolled(session.id, +1);
         toast.error(result.message);
-        return;
+      } else {
+        toast.success(t("{name} removed", { name: member.name }));
       }
-      toast.success(t("{name} removed", { name: member.name }));
-    });
+      setBusy(member.enrollmentId, false);
+    })();
   };
 
   /** Reinstate a rejected client back to the enrolled list (passes the capacity trigger). */
   const handleReinstate = (member: RosterMember) => {
     const previous = member.status;
+    setBusy(member.enrollmentId, true);
     setRoster((prev) =>
       prev.map((m) => (m.enrollmentId === member.enrollmentId ? { ...m, status: "booked" } : m))
     );
     adjustEnrolled(session.id, +1);
 
-    startTransition(async () => {
+    void (async () => {
       const result = await setEnrollmentStatus(member.enrollmentId, "booked");
       if (!result.success) {
         setRoster((prev) =>
@@ -191,21 +211,23 @@ function Body({
         );
         adjustEnrolled(session.id, -1);
         toast.error(result.message); // can be SESSION_FULL
-        return;
+      } else {
+        toast.success(t("{name} approved", { name: member.name }));
       }
-      toast.success(t("{name} approved", { name: member.name }));
-    });
+      setBusy(member.enrollmentId, false);
+    })();
   };
 
   /** Mark attended / not — optimistic; doesn't change the enrolled count. */
   const handleToggleAttendance = (member: RosterMember, attending: boolean) => {
     const previous = member.status;
+    setBusy(member.enrollmentId, true);
     setRoster((prev) =>
       prev.map((m) =>
         m.enrollmentId === member.enrollmentId ? { ...m, status: attending ? "attended" : "booked" } : m
       )
     );
-    startTransition(async () => {
+    void (async () => {
       const result = await toggleAttendance(member.enrollmentId, attending);
       if (!result.success) {
         setRoster((prev) =>
@@ -213,24 +235,27 @@ function Body({
         );
         toast.error(result.message);
       }
-    });
+      setBusy(member.enrollmentId, false);
+    })();
   };
 
   /** Persist a per-trainee note — optimistic, reverted if the action fails. */
   const handleSaveNote = (member: RosterMember, note: string) => {
     const previous = member.note ?? "";
     if (note === previous) return;
+    setBusy(member.enrollmentId, true);
     setRoster((prev) => prev.map((m) => (m.enrollmentId === member.enrollmentId ? { ...m, note } : m)));
 
-    startTransition(async () => {
+    void (async () => {
       const result = await setEnrollmentNote(member.enrollmentId, note);
       if (!result.success) {
         setRoster((prev) => prev.map((m) => (m.enrollmentId === member.enrollmentId ? { ...m, note: previous } : m)));
         toast.error(result.message);
-        return;
+      } else {
+        toast.success(t("Note saved"));
       }
-      toast.success(t("Note saved"));
-    });
+      setBusy(member.enrollmentId, false);
+    })();
   };
 
   /** Cancel this single session (owner) — drops it from the calendar; roster kept. */
@@ -275,7 +300,7 @@ function Body({
             <Lock className="size-4 shrink-0" /> {t("You can't enroll in a past class.")}
           </p>
         ) : (
-          <AddClientBox excludeIds={excludeIds} onPick={handleEnroll} disabled={pending || loading} />
+          <AddClientBox excludeIds={excludeIds} onPick={handleEnroll} disabled={loading} />
         )}
 
         {/* Enrolled list */}
@@ -298,7 +323,7 @@ function Body({
               <div key={m.enrollmentId} className="flex items-center gap-3 rounded-xl border bg-card px-3 py-2.5">
                 <Checkbox
                   checked={m.status === "attended"}
-                  disabled={pending}
+                  disabled={rowBusy(m.enrollmentId)}
                   onCheckedChange={(v) => handleToggleAttendance(m, v === true)}
                   aria-label={t("Mark {name} as attended", { name: m.name })}
                   className="size-5"
@@ -309,12 +334,12 @@ function Body({
                     {t("Attended")}
                   </span>
                 )}
-                <NoteButton note={m.note ?? ""} onSave={(n) => handleSaveNote(m, n)} disabled={pending} />
+                <NoteButton note={m.note ?? ""} onSave={(n) => handleSaveNote(m, n)} disabled={rowBusy(m.enrollmentId)} />
                 <button
                   type="button"
                   aria-label={t("Remove {name}", { name: m.name })}
                   onClick={() => handleRemove(m)}
-                  disabled={pending}
+                  disabled={rowBusy(m.enrollmentId)}
                   className="grid size-8 shrink-0 place-content-center rounded-lg text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
                 >
                   <Trash2 className="size-4" />
@@ -342,7 +367,7 @@ function Body({
                     type="button"
                     aria-label={t("Approve {name}", { name: m.name })}
                     onClick={() => handleReinstate(m)}
-                    disabled={pending}
+                    disabled={rowBusy(m.enrollmentId)}
                     className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
                   >
                     <RotateCcw className="size-3.5" /> {t("Approve")}
