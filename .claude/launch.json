@@ -7,6 +7,12 @@
       "runtimeArgs": ["run", "dev"],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "velodent-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "C:/Users/MAHDI/Documents/veloDENT", "run", "dev", "--", "-p", "3111"],
+      "port": 3111
     }
   ]
 }
