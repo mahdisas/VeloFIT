@@ -86,11 +86,11 @@ export function ClientSearch() {
         <div className="fixed inset-x-3 top-16 z-50 max-h-[26rem] overflow-y-auto rounded-xl border bg-popover p-1.5 shadow-lg md:absolute md:inset-x-0 md:top-full md:mt-1.5">
           {loading && results.length === 0 ? (
             <div className="flex items-center gap-2 px-3 py-6 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" /> Searching…
+              <Loader2 className="size-4 animate-spin" /> {t("Searching…")}
             </div>
           ) : results.length === 0 ? (
             <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-              No clients found
+              {t("No clients found.")}
             </div>
           ) : (
             results.map((c) => (
@@ -114,21 +114,21 @@ export function ClientSearch() {
 
                 {c.status === "active" ? (
                   <div className="flex shrink-0 items-center gap-3">
-                    <div className="hidden text-right text-[11px] leading-tight text-muted-foreground tabular-nums sm:block">
+                    <div className="hidden text-end text-[11px] leading-tight text-muted-foreground tabular-nums sm:block">
                       <div>
-                        <span className="text-muted-foreground/60">From</span> {fmtDate(c.fromDate)}
+                        <span className="text-muted-foreground/60">{t("From")}</span> {fmtDate(c.fromDate)}
                       </div>
                       <div>
-                        <span className="text-muted-foreground/60">To</span> {fmtDate(c.toDate)}
+                        <span className="text-muted-foreground/60">{t("To")}</span> {fmtDate(c.toDate)}
                       </div>
                     </div>
                     <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-600/20 dark:bg-emerald-950/40 dark:text-emerald-400 dark:ring-emerald-400/20">
-                      Active
+                      {t("Active")}
                     </span>
                   </div>
                 ) : (
                   <span className="shrink-0 rounded-full bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-600 ring-1 ring-rose-600/20 dark:bg-rose-950/40 dark:text-rose-400 dark:ring-rose-400/20">
-                    Inactive
+                    {t("Inactive")}
                   </span>
                 )}
               </Link>

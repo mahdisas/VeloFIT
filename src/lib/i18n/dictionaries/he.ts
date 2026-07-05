@@ -1256,6 +1256,8 @@ export const he: Dictionary = {
   "Upcoming client birthdays — a reason to reach out.": "ימי הולדת קרובים של לקוחות — סיבה ליצור קשר.",
   "Payments received": "תשלומים שהתקבלו",
   "Signing out…": "מתנתק…",
+  From: "מ-",
+  To: "עד",
   Pages: "עמודים",
   "Choose which sections this gym sees in its Control Panel.": "בחר אילו מקטעים המכון הזה יראה בלוח הבקרה שלו.",
   "{page} is now visible": "{page} כעת גלוי",
