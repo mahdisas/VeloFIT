@@ -57,16 +57,32 @@ type ReportSearchParams = { [key: string]: string | string[] | undefined };
 const PAGE_SIZES = [10, 25, 50];
 const first = (v: string | string[] | undefined): string => (Array.isArray(v) ? v[0] : v) ?? "";
 
+/** The current calendar month's bounds — the default period for finance reports. */
+function currentMonthBounds(): { from: string; to: string } {
+  const now = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const ym = `${now.getFullYear()}-${p(now.getMonth() + 1)}`;
+  return { from: `${ym}-01`, to: `${ym}-${p(last)}` };
+}
+
 /** Resolve the Finance Documents report state from the URL search params. */
 function docParams(sp: ReportSearchParams): DocumentReportParams {
   const typesRaw = first(sp.types);
   const size = Number(first(sp.size));
+  // Default = "search by year and month" over the CURRENT month (reference
+  // behavior); mode=range with empty dates means "all time".
+  const mode = first(sp.mode) === "range" ? "range" : "month";
+  let from = first(sp.from);
+  let to = first(sp.to);
+  if (mode === "month" && !from && !to) ({ from, to } = currentMonthBounds());
   return {
     search: first(sp.q),
     // key absent ⇒ all types; present ⇒ the (possibly empty) selected subset.
     docTypes: sp.types === undefined ? null : typesRaw.split(",").filter(Boolean),
-    from: first(sp.from),
-    to: first(sp.to),
+    mode,
+    from,
+    to,
     sort: first(sp.sort) || "date",
     dir: first(sp.dir) === "asc" ? "asc" : "desc",
     page: Math.max(1, Number(first(sp.page)) || 1),
@@ -78,21 +94,38 @@ const ALL_METHODS: PaymentMethod[] = ["cash", "creditCard", "cheques", "bankTran
 
 /** Resolve the Finance Payments report state from the URL search params. */
 function payParams(sp: ReportSearchParams): PaymentsReportParams {
-  const methodsRaw = first(sp.methods);
   const size = Number(first(sp.size));
+  const mode = first(sp.mode) === "range" ? "range" : "month";
+  let from = first(sp.from);
+  let to = first(sp.to);
+  if (mode === "month" && !from && !to) ({ from, to } = currentMonthBounds());
+  const openRaw = first(sp.open);
   return {
-    search: first(sp.q),
-    methods:
-      sp.methods === undefined
-        ? null
-        : (methodsRaw.split(",").filter((m): m is PaymentMethod => (ALL_METHODS as string[]).includes(m))),
-    from: first(sp.from),
-    to: first(sp.to),
+    mode,
+    from,
+    to,
+    open: (ALL_METHODS as string[]).includes(openRaw) ? (openRaw as PaymentMethod) : null,
     sort: first(sp.sort) || "date",
     dir: first(sp.dir) === "asc" ? "asc" : "desc",
     page: Math.max(1, Number(first(sp.page)) || 1),
     pageSize: PAGE_SIZES.includes(size) ? size : 10,
   };
+}
+
+/**
+ * Fetch the payments report: the per-method card sums for the whole period
+ * (never filtered by method) plus, when an accordion is open, that method's
+ * sorted/paginated rows.
+ */
+async function loadPaymentsReport(p: PaymentsReportParams) {
+  const base = { search: "", from: p.from || null, to: p.to || null, sort: p.sort, dir: p.dir };
+  const [summary, openData] = await Promise.all([
+    getFinancePayments({ ...base, methods: null, page: 1, pageSize: 1 }),
+    p.open
+      ? getFinancePayments({ ...base, methods: [p.open], page: p.page, pageSize: p.pageSize })
+      : Promise.resolve(null),
+  ]);
+  return { cards: summary.cards, openRows: openData?.rows ?? [], openTotal: openData?.total ?? 0 };
 }
 
 /** Resolve the Sold-items report state (kind comes from the slug, not the URL). */
@@ -143,13 +176,13 @@ const RENDERERS: Record<string, (sp: ReportSearchParams) => Promise<React.ReactN
     // Financial snapshot: only payment-backed documents. The full paper trail
     // (incl. unpaid invoices + bids) lives in the Document creation report.
     const data = await getFinanceDocuments({ ...p, paidOnly: true });
-    return <DocumentReport {...data} params={p} filename="finance-document-report.csv" showInitiatedBy />;
+    return <DocumentReport {...data} params={p} filename="finance-document-report.csv" showInitiatedBy paidOnly />;
   },
   "finance-charges": async () => <FinanceChargesReport charges={await getFinanceCharges()} />,
   "finance-payments": async (sp) => {
     const p = payParams(sp);
-    const data = await getFinancePayments(p);
-    return <PaymentsReport {...data} params={p} filename="finance-payments-report" />;
+    const data = await loadPaymentsReport(p);
+    return <PaymentsReport {...data} params={p} />;
   },
   "document-creation": async (sp) => {
     const p = docParams(sp);
@@ -158,8 +191,8 @@ const RENDERERS: Record<string, (sp: ReportSearchParams) => Promise<React.ReactN
   },
   "payments-creation": async (sp) => {
     const p = payParams(sp);
-    const data = await getFinancePayments(p);
-    return <PaymentsReport {...data} params={p} filename="payments-creation-report" />;
+    const data = await loadPaymentsReport(p);
+    return <PaymentsReport {...data} params={p} />;
   },
   "credit-card-transactions": async () => <CreditCardReport txns={await getCreditCardTransactions()} />,
   "orders": async (sp) => {

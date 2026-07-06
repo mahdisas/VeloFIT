@@ -1259,6 +1259,8 @@ export const ar: Dictionary = {
   From: "من",
   To: "إلى",
   Pages: "الصفحات",
+  Entrances: "الدخول",
+  Packages: "الباقات",
   "Choose which sections this gym sees in its Control Panel.": "اختر الأقسام التي يراها هذا النادي في لوحة التحكم.",
   "{page} is now visible": "{page} أصبح ظاهرًا",
   "{page} is now hidden": "{page} أصبح مخفيًا",

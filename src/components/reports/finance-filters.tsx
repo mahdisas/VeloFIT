@@ -68,6 +68,69 @@ export function usePeriodFilter(defaults?: { year?: string; month?: string }) {
   return { node, matches };
 }
 
+/**
+ * URL-driven period filter for the SERVER-side finance reports: a radio between
+ * "Search by year and month" (default — two selects) and "Search by date range"
+ * (from/to pickers). Month mode writes the month's exact bounds into from/to, so
+ * the report RPCs need no new parameters; range mode sets mode=range in the URL
+ * so the server stops defaulting to the current month.
+ */
+export function PeriodFilterControls({
+  mode,
+  from,
+  to,
+  navigate,
+}: {
+  mode: "month" | "range";
+  from: string;
+  to: string;
+  navigate: (patch: Record<string, string | null>) => void;
+}) {
+  const t = useT();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const now = new Date();
+  const base = /^\d{4}-\d{2}/.test(from) ? from : `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+  const year = base.slice(0, 4);
+  const month = String(Number(base.slice(5, 7)));
+
+  const gotoMonth = (y: string, m: string) => {
+    const last = new Date(Number(y), Number(m), 0).getDate();
+    navigate({ mode: null, from: `${y}-${pad(Number(m))}-01`, to: `${y}-${pad(Number(m))}-${pad(last)}` });
+  };
+
+  return (
+    <div className="flex flex-col items-start gap-4">
+      <RadioGroup
+        value={mode}
+        onValueChange={(v) => (v === "month" ? gotoMonth(year, month) : navigate({ mode: "range", from: null, to: null }))}
+        className="flex flex-wrap gap-6"
+      >
+        <label className="flex items-center gap-2 text-sm">
+          <RadioGroupItem value="month" /> {t("Search by year and month")}
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <RadioGroupItem value="range" /> {t("Search by date range")}
+        </label>
+      </RadioGroup>
+      {mode === "month" ? (
+        <div className="flex flex-wrap gap-4">
+          <FilterSelect label="Year" value={year} onChange={(y) => gotoMonth(y, month)} options={YEAR_OPTIONS} className="w-full sm:w-36" />
+          <FilterSelect label="Month" value={month} onChange={(m) => gotoMonth(year, m)} options={MONTH_OPTIONS} className="w-full sm:w-44" />
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-4">
+          <FilterField label="From date" className="w-full sm:w-44">
+            <Input type="date" className="h-11" value={from} onChange={(e) => navigate({ mode: "range", from: e.target.value || null })} />
+          </FilterField>
+          <FilterField label="To date" className="w-full sm:w-44">
+            <Input type="date" className="h-11" value={to} onChange={(e) => navigate({ mode: "range", to: e.target.value || null })} />
+          </FilterField>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Multi-checkbox filter with an "All" row. Returns its UI + a predicate. */
 export function useMultiCheckboxFilter(label: string, options: string[], width = "sm:w-96") {
   const t = useT();
@@ -138,7 +201,7 @@ export function InvoiceCards({ receipts, withoutVat, withVat }: { receipts: numb
   return (
     <div className="grid gap-5 sm:grid-cols-3">
       {cards.map((c) => (
-        <div key={c.label} className="rounded-lg bg-primary px-4 py-6 text-center text-primary-foreground shadow-md">
+        <div key={c.label} className="rounded-lg bg-primary px-4 py-6 text-center text-primary-foreground shadow-lg shadow-primary/25">
           <div className="font-semibold">{t(c.label)}</div>
           <div className="mt-1 text-lg font-bold">{c.value}</div>
         </div>

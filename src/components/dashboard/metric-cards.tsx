@@ -20,6 +20,7 @@ export async function MetricCards({ metrics }: { metrics: DashboardMetrics }) {
         <CardContent>
           <MetricStat
             title={t("Active subscriptions")}
+            seriesLabel={t("Classes Subscriptions")}
             variant="bar"
             color="#5b8def"
             data={sparklines.activeSubscriptions}
@@ -37,6 +38,7 @@ export async function MetricCards({ metrics }: { metrics: DashboardMetrics }) {
         <CardContent>
           <MetricStat
             title={t("Today Entrances")}
+            seriesLabel={t("Entrances")}
             variant="area"
             color="#ef4444"
             data={sparklines.todayEntrances}
@@ -56,6 +58,8 @@ export async function MetricCards({ metrics }: { metrics: DashboardMetrics }) {
               report total and the chart's "Payments received" series. */}
           <MetricStat
             title={t("Payments received")}
+            seriesLabel={t("Payments received")}
+            currency
             variant="area"
             color="#3b82f6"
             data={sparklines.totalDebits}
@@ -70,6 +74,8 @@ export async function MetricCards({ metrics }: { metrics: DashboardMetrics }) {
           <div className="min-w-0 flex-1">
             <MetricStat
               title={t("Total Receipts")}
+              seriesLabel={t("Total Receipts")}
+              currency
               variant="bar"
               color="#fbbf24"
               data={sparklines.totalReceipts}
@@ -80,6 +86,8 @@ export async function MetricCards({ metrics }: { metrics: DashboardMetrics }) {
           <div className="min-w-0 flex-1">
             <MetricStat
               title={t("Total Invoices")}
+              seriesLabel={t("Total Invoices")}
+              currency
               variant="bar"
               color="#fbbf24"
               data={sparklines.totalInvoices}

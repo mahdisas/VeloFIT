@@ -7,10 +7,10 @@ import { ChevronsUpDown, FileSpreadsheet, FileText, Printer, Search } from "luci
 import { toast } from "sonner";
 
 import { exportFinanceDocuments } from "@/app/(app)/reports/actions";
-import { InvoiceCards } from "@/components/reports/finance-filters";
+import { InvoiceCards, PeriodFilterControls } from "@/components/reports/finance-filters";
+import { FilterSelect } from "@/components/reports/filter-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -41,6 +41,8 @@ const DOC_TYPE_OPTIONS = [
 export type DocumentReportParams = {
   search: string;
   docTypes: string[] | null; // null = all types selected
+  /** "month" (default: year+month selects) or "range" (from/to pickers). */
+  mode: "month" | "range";
   from: string;
   to: string;
   sort: string;
@@ -64,6 +66,7 @@ export function DocumentReport({
   params,
   filename,
   showInitiatedBy = false,
+  paidOnly = false,
 }: {
   rows: FinanceDocument[];
   total: number;
@@ -71,6 +74,9 @@ export function DocumentReport({
   params: DocumentReportParams;
   filename: string;
   showInitiatedBy?: boolean;
+  /** Must match the page's fetch — otherwise the CSV export includes unpaid
+   *  documents that the on-screen table excludes. */
+  paidOnly?: boolean;
 }) {
   const t = useT();
   const router = useRouter();
@@ -82,6 +88,7 @@ export function DocumentReport({
   const current: Record<string, string> = {};
   if (params.search) current.q = params.search;
   if (params.docTypes) current.types = params.docTypes.join(",");
+  if (params.mode === "range") current.mode = "range";
   if (params.from) current.from = params.from;
   if (params.to) current.to = params.to;
   if (params.sort !== "date") current.sort = params.sort;
@@ -111,14 +118,6 @@ export function DocumentReport({
     const id = setTimeout(() => navigate({ q: search || null }), 400);
     return () => clearTimeout(id);
   }, [search, params.search, navigate]);
-
-  const allTypes = params.docTypes === null;
-  const isChecked = (v: string) => allTypes || params.docTypes!.includes(v);
-  const toggleType = (v: string) => {
-    const base = allTypes ? DOC_TYPE_OPTIONS.map((o) => o.value) : params.docTypes!;
-    const arr = base.includes(v) ? base.filter((x) => x !== v) : [...base, v];
-    navigate({ types: arr.length === DOC_TYPE_OPTIONS.length ? null : arr.join(",") });
-  };
 
   const toggleSort = (key: string) =>
     navigate({ sort: key, dir: params.sort === key && params.dir === "asc" ? "desc" : "asc" });
@@ -164,6 +163,7 @@ export function DocumentReport({
         to: params.to || null,
         sort: params.sort,
         dir: params.dir,
+        paidOnly,
       });
       const esc = (c: string | number) => `"${String(c).replace(/"/g, '""')}"`;
       const csv = [
@@ -183,26 +183,17 @@ export function DocumentReport({
   return (
     <Card>
       <CardContent className="flex flex-col gap-6">
-        {/* Filters (server-side) */}
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-end gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-muted-foreground">{t("From date")}</label>
-              <Input type="date" value={params.from} onChange={(e) => navigate({ from: e.target.value || null })} className="w-44" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-muted-foreground">{t("To date")}</label>
-              <Input type="date" value={params.to} onChange={(e) => navigate({ to: e.target.value || null })} className="w-44" />
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-x-5 gap-y-2">
-            {DOC_TYPE_OPTIONS.map((o) => (
-              <label key={o.value} className="flex cursor-pointer items-center gap-2 text-sm">
-                <Checkbox checked={isChecked(o.value)} onCheckedChange={() => toggleType(o.value)} />
-                {t(o.label)}
-              </label>
-            ))}
-          </div>
+        {/* Filters (server-side) — stacked at the reading start (right in RTL):
+            document-type dropdown on top, then the year/month ↔ date-range radio. */}
+        <div className="flex flex-col items-start gap-4">
+          <FilterSelect
+            label="Document type"
+            value={params.docTypes?.[0] ?? "all"}
+            onChange={(v) => navigate({ types: v === "all" ? null : v })}
+            options={[{ value: "all", label: "All" }, ...DOC_TYPE_OPTIONS]}
+            className="w-full sm:w-64"
+          />
+          <PeriodFilterControls mode={params.mode} from={params.from} to={params.to} navigate={navigate} />
         </div>
 
         <InvoiceCards receipts={cards.receipts} withoutVat={cards.withoutVat} withVat={cards.withVat} />
