@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Clock, FileText, Loader2, Lock, RotateCcw, SendHorizontal, Trash2, UserPlus, Users } from "lucide-react";
+import { Clock, FileText, Loader2, Lock, Phone, RotateCcw, SendHorizontal, Trash2, UserPlus, Users } from "lucide-react";
 
 import {
   deleteSingleSession,
@@ -329,6 +329,16 @@ function Body({
                   className="size-5"
                 />
                 <span className="min-w-0 flex-1 truncate text-sm" dir="auto">{m.name}</span>
+                {/* Tap-to-call — the front desk chases no-shows from the roster. */}
+                {m.phone && (
+                  <a
+                    href={`tel:${m.phone.replace(/[^\d+]/g, "")}`}
+                    aria-label={t("Call {name}", { name: m.name })}
+                    className="grid size-8 shrink-0 place-content-center rounded-lg text-primary transition-colors hover:bg-primary/10"
+                  >
+                    <Phone className="size-4" />
+                  </a>
+                )}
                 {m.status === "attended" && (
                   <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
                     {t("Attended")}

@@ -1261,6 +1261,7 @@ export const ar: Dictionary = {
   Pages: "الصفحات",
   Entrances: "الدخول",
   Packages: "الباقات",
+  "Call {name}": "اتصل بـ {name}",
   "Choose which sections this gym sees in its Control Panel.": "اختر الأقسام التي يراها هذا النادي في لوحة التحكم.",
   "{page} is now visible": "{page} أصبح ظاهرًا",
   "{page} is now hidden": "{page} أصبح مخفيًا",

@@ -139,6 +139,8 @@ export type RosterMember = {
   enrollmentId: string;
   clientId: string;
   name: string;
+  /** Client's phone — powers the roster's tap-to-call icon. */
+  phone?: string;
   status: RosterStatus;
   note?: string; // per-trainee note (class_enrollments.notes)
 };
@@ -147,7 +149,7 @@ export type EnrollResult =
   | { success: true; member: RosterMember }
   | { success: false; error: "SESSION_FULL" | "ALREADY_ENROLLED" | "NOT_FOUND" | "ERROR"; message: string };
 
-type RosterRow = { id: string; status: string; notes: string | null; client: { id: string; full_name: string } | null };
+type RosterRow = { id: string; status: string; notes: string | null; client: { id: string; full_name: string; phone: string | null } | null };
 
 /** The session's roster (newest enrollment last), for the detail dialog. */
 export async function getSessionRoster(sessionId: string): Promise<RosterMember[]> {
@@ -163,9 +165,9 @@ export async function getSessionRoster(sessionId: string): Promise<RosterMember[
 
   // Prefer the note column; fall back if migration 00013 isn't applied yet so a
   // missing column never breaks the (core) roster — the note just won't load.
-  let { data, error } = await roster("id, status, notes, client:clients(id, full_name)");
+  let { data, error } = await roster("id, status, notes, client:clients(id, full_name, phone)");
   if (error && /notes/i.test(error.message)) {
-    ({ data, error } = await roster("id, status, client:clients(id, full_name)"));
+    ({ data, error } = await roster("id, status, client:clients(id, full_name, phone)"));
   }
   if (error) throw new Error(`Failed to load roster: ${error.message}`);
 
@@ -173,6 +175,7 @@ export async function getSessionRoster(sessionId: string): Promise<RosterMember[
     enrollmentId: r.id,
     clientId: r.client?.id ?? "",
     name: r.client?.full_name ?? "—",
+    phone: r.client?.phone ?? "",
     status: r.status as RosterStatus,
     note: r.notes ?? "",
   }));
@@ -229,9 +232,9 @@ export async function enrollClientInSession(sessionId: string, clientId: string)
   // and the capacity trigger must be able to see the session under the caller's RLS).
   const [sessionRes, clientRes] = await Promise.all([
     supabase.from("class_sessions").select("id").eq("id", sessionId).eq("gym_id", profile.gymId).maybeSingle(),
-    supabase.from("clients").select("id, full_name").eq("id", clientId).eq("gym_id", profile.gymId).maybeSingle(),
+    supabase.from("clients").select("id, full_name, phone").eq("id", clientId).eq("gym_id", profile.gymId).maybeSingle(),
   ]);
-  const client = clientRes.data as { id: string; full_name: string } | null;
+  const client = clientRes.data as { id: string; full_name: string; phone: string | null } | null;
   if (!sessionRes.data || !client) {
     return { success: false, error: "NOT_FOUND", message: "Session or client not found in this gym." };
   }
@@ -260,7 +263,7 @@ export async function enrollClientInSession(sessionId: string, clientId: string)
     revalidatePath("/classes/calendar");
     return {
       success: true,
-      member: { enrollmentId: data.id as string, clientId: client.id, name: client.full_name, status: "booked" },
+      member: { enrollmentId: data.id as string, clientId: client.id, name: client.full_name, phone: client.phone ?? "", status: "booked" },
     };
   } catch (e) {
     return { success: false, error: "ERROR", message: e instanceof Error ? e.message : "Failed to enroll client." };
@@ -282,7 +285,7 @@ export async function setEnrollmentStatus(enrollmentId: string, status: RosterSt
       .update({ status })
       .eq("id", enrollmentId)
       .eq("gym_id", profile.gymId)
-      .select("id, status, client:clients(id, full_name)")
+      .select("id, status, client:clients(id, full_name, phone)")
       .single();
 
     if (error) {
@@ -300,6 +303,7 @@ export async function setEnrollmentStatus(enrollmentId: string, status: RosterSt
         enrollmentId: row.id,
         clientId: row.client?.id ?? "",
         name: row.client?.full_name ?? "—",
+        phone: row.client?.phone ?? "",
         status: row.status as RosterStatus,
       },
     };

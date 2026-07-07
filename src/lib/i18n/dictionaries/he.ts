@@ -1261,6 +1261,7 @@ export const he: Dictionary = {
   Pages: "עמודים",
   Entrances: "כניסות",
   Packages: "חבילות",
+  "Call {name}": "התקשר אל {name}",
   "Choose which sections this gym sees in its Control Panel.": "בחר אילו מקטעים המכון הזה יראה בלוח הבקרה שלו.",
   "{page} is now visible": "{page} כעת גלוי",
   "{page} is now hidden": "{page} כעת מוסתר",
