@@ -391,6 +391,11 @@ type MeasurementRow = {
 /**
  * Attendance / classes history: the client's enrollments joined to their dated
  * session and class name. checkedIn = enrollment marked 'attended'.
+ *
+ * Only real spots count: 'booked' and 'attended'. A rejected/removed enrollment
+ * (→ 'canceled', from the calendar or the veloFIT roster) or a 'no_show'
+ * (bucketed as Rejected in the roster UI) must NOT appear as an enrollment with
+ * check-in false — and a waitlisted client never held a spot at all.
  */
 export async function getClientClassHistory(
   supabase: ServerSupabase,
@@ -403,7 +408,8 @@ export async function getClientClassHistory(
       "id, status, session:class_sessions(session_date, start_time, end_time, notes, class:classes(name, kind:class_kinds(name)))"
     )
     .eq("gym_id", gymId)
-    .eq("client_id", clientId);
+    .eq("client_id", clientId)
+    .in("status", ["booked", "attended"]);
 
   if (error) throw new Error(`Failed to load classes history: ${error.message}`);
 
