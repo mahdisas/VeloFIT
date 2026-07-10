@@ -6,13 +6,9 @@ import { Loader2, Lock } from "lucide-react";
 import { loadCalendarSessions } from "@/app/(app)/classes/calendar/actions";
 import { ClassAttendanceSheet } from "@/components/mobile/class-attendance-sheet";
 import { MobileClassCard } from "@/components/mobile/mobile-class-card";
+import { WeekDatePicker } from "@/components/mobile/week-date-picker";
 import { addDays, toISO, type CalendarSession, type CalendarSessionMap } from "@/lib/calendar";
 import { useLocale, useT } from "@/lib/i18n/provider";
-import { cn } from "@/lib/utils";
-
-/** Days of past/future shown in the horizontal scroller, relative to today. */
-const PAST_DAYS = 7;
-const FUTURE_DAYS = 35;
 
 export function MobileHome({ initialSessions }: { initialSessions: CalendarSessionMap }) {
   const t = useT();
@@ -35,18 +31,9 @@ export function MobileHome({ initialSessions }: { initialSessions: CalendarSessi
   });
   const [loadingDate, setLoadingDate] = React.useState<string | null>(null);
 
-  // The dates rendered in the scroller.
-  const days = React.useMemo(() => {
-    const base = new Date();
-    return Array.from({ length: PAST_DAYS + FUTURE_DAYS + 1 }, (_, i) => addDays(base, i - PAST_DAYS));
-  }, []);
-
-  // Localized formatters (weekday + month names follow the active locale; the
-  // day number stays Latin for consistency with the rest of the app).
+  // Localized formatter for the selected-day label under the picker.
   const fmt = React.useMemo(
     () => ({
-      weekday: new Intl.DateTimeFormat(locale, { weekday: "short" }),
-      monthYear: new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }),
       full: new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long" }),
     }),
     [locale]
@@ -68,12 +55,6 @@ export function MobileHome({ initialSessions }: { initialSessions: CalendarSessi
       active = false;
     };
   }, [selected, loaded]);
-
-  // Center the selected chip on first paint.
-  const selectedChipRef = React.useRef<HTMLButtonElement>(null);
-  React.useEffect(() => {
-    selectedChipRef.current?.scrollIntoView({ inline: "center", block: "nearest" });
-  }, []);
 
   // Optimistic enrolled-count bump from the attendance sheet (keeps card badges in sync).
   const adjustEnrolled = React.useCallback((sessionId: string, delta: number) => {
@@ -116,59 +97,8 @@ export function MobileHome({ initialSessions }: { initialSessions: CalendarSessi
 
   return (
     <div className="flex min-h-full flex-col">
-      {/* Sticky date scroller */}
-      <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
-        <div className="flex items-baseline justify-between px-4 pt-3">
-          <h1 className="font-heading text-lg font-semibold capitalize" dir="auto">
-            {fmt.monthYear.format(selectedDateObj)}
-          </h1>
-          {selected !== today && (
-            <button
-              type="button"
-              onClick={() => setSelected(today)}
-              className="text-sm font-medium text-primary"
-            >
-              {t("Today")}
-            </button>
-          )}
-        </div>
-
-        <div className="flex gap-1.5 overflow-x-auto px-3 py-3 scrollbar-hide">
-          {days.map((d) => {
-            const iso = toISO(d);
-            const isSel = iso === selected;
-            const isToday = iso === today;
-            const isPast = iso < today; // past days are view-only (no enrolling)
-            return (
-              <button
-                key={iso}
-                ref={isSel ? selectedChipRef : undefined}
-                type="button"
-                onClick={() => setSelected(iso)}
-                className={cn(
-                  "flex w-12 shrink-0 flex-col items-center gap-1 rounded-2xl py-2 transition-colors",
-                  isSel
-                    ? "bg-primary text-primary-foreground"
-                    : cn("text-muted-foreground hover:bg-muted", isPast && "opacity-45")
-                )}
-              >
-                <span className="text-[11px] capitalize">{fmt.weekday.format(d)}</span>
-                <span className="text-base font-semibold leading-none">{d.getDate()}</span>
-                {isPast ? (
-                  <Lock className="size-2.5" />
-                ) : (
-                  <span
-                    className={cn(
-                      "size-1 rounded-full",
-                      isToday ? (isSel ? "bg-primary-foreground" : "bg-primary") : "bg-transparent"
-                    )}
-                  />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      {/* Sticky week-by-week date picker (arrows + fold-out month calendar). */}
+      <WeekDatePicker selected={selected} onSelect={setSelected} lockPast />
 
       {/* Class list for the selected day */}
       <div className="flex flex-1 flex-col gap-3 p-4">

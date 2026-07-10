@@ -7,12 +7,9 @@ import { Loader2 } from "lucide-react";
 import { getMemberSessions } from "@/app/app/booking-actions";
 import { MemberClassSheet } from "@/components/mobile/member-class-sheet";
 import { MobileClassCard } from "@/components/mobile/mobile-class-card";
+import { WeekDatePicker } from "@/components/mobile/week-date-picker";
 import { addDays, toISO, type CalendarSessionMap } from "@/lib/calendar";
 import { useLocale, useT } from "@/lib/i18n/provider";
-import { cn } from "@/lib/utils";
-
-const PAST_DAYS = 7;
-const FUTURE_DAYS = 35;
 
 /**
  * Member Schedules — the same date-scroller as the owner's mobile schedule, but
@@ -36,15 +33,8 @@ export function MemberSchedule({ initialSessions }: { initialSessions: CalendarS
   const [loadingDate, setLoadingDate] = React.useState<string | null>(null);
   const [openId, setOpenId] = React.useState<string | null>(null);
 
-  const days = React.useMemo(() => {
-    const base = new Date();
-    return Array.from({ length: PAST_DAYS + FUTURE_DAYS + 1 }, (_, i) => addDays(base, i - PAST_DAYS));
-  }, []);
-
   const fmt = React.useMemo(
     () => ({
-      weekday: new Intl.DateTimeFormat(locale, { weekday: "short" }),
-      monthYear: new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }),
       full: new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long" }),
     }),
     [locale]
@@ -77,11 +67,6 @@ export function MemberSchedule({ initialSessions }: { initialSessions: CalendarS
     router.refresh();
   }, [selected, router]);
 
-  const selectedChipRef = React.useRef<HTMLButtonElement>(null);
-  React.useEffect(() => {
-    selectedChipRef.current?.scrollIntoView({ inline: "center", block: "nearest" });
-  }, []);
-
   const selectedDateObj = React.useMemo(() => {
     const [y, m, d] = selected.split("-").map(Number);
     return new Date(y, m - 1, d);
@@ -95,37 +80,8 @@ export function MemberSchedule({ initialSessions }: { initialSessions: CalendarS
 
   return (
     <div className="flex min-h-full flex-col">
-      <div className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/80">
-        <div className="flex items-baseline justify-between px-4 pt-3">
-          <h1 className="font-heading text-lg font-semibold capitalize" dir="auto">{fmt.monthYear.format(selectedDateObj)}</h1>
-          {selected !== today && (
-            <button type="button" onClick={() => setSelected(today)} className="text-sm font-medium text-primary">{t("Today")}</button>
-          )}
-        </div>
-        <div className="flex gap-1.5 overflow-x-auto px-3 py-3 scrollbar-hide">
-          {days.map((d) => {
-            const iso = toISO(d);
-            const isSel = iso === selected;
-            const isToday = iso === today;
-            return (
-              <button
-                key={iso}
-                ref={isSel ? selectedChipRef : undefined}
-                type="button"
-                onClick={() => setSelected(iso)}
-                className={cn(
-                  "flex w-12 shrink-0 flex-col items-center gap-1 rounded-2xl py-2 transition-colors",
-                  isSel ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
-                )}
-              >
-                <span className="text-[11px] capitalize">{fmt.weekday.format(d)}</span>
-                <span className="text-base font-semibold leading-none">{d.getDate()}</span>
-                <span className={cn("size-1 rounded-full", isToday ? (isSel ? "bg-primary-foreground" : "bg-primary") : "bg-transparent")} />
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      {/* Sticky week-by-week date picker (arrows + fold-out month calendar). */}
+      <WeekDatePicker selected={selected} onSelect={setSelected} />
 
       <div className="flex flex-1 flex-col gap-3 p-4">
         <p className="text-sm font-medium capitalize text-muted-foreground" dir="auto">{fmt.full.format(selectedDateObj)}</p>

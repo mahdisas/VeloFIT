@@ -1265,4 +1265,10 @@ export const ar: Dictionary = {
   "Choose which sections this gym sees in its Control Panel.": "اختر الأقسام التي يراها هذا النادي في لوحة التحكم.",
   "{page} is now visible": "{page} أصبح ظاهرًا",
   "{page} is now hidden": "{page} أصبح مخفيًا",
+
+  // ── week date picker ──
+  "Previous week": "الأسبوع السابق",
+  "Next week": "الأسبوع التالي",
+  "Previous month": "الشهر السابق",
+  "Next month": "الشهر التالي",
 };

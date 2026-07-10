@@ -1265,4 +1265,10 @@ export const he: Dictionary = {
   "Choose which sections this gym sees in its Control Panel.": "בחר אילו מקטעים המכון הזה יראה בלוח הבקרה שלו.",
   "{page} is now visible": "{page} כעת גלוי",
   "{page} is now hidden": "{page} כעת מוסתר",
+
+  // ── week date picker ──
+  "Previous week": "השבוע הקודם",
+  "Next week": "השבוע הבא",
+  "Previous month": "החודש הקודם",
+  "Next month": "החודש הבא",
 };
