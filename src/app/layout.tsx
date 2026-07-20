@@ -6,6 +6,7 @@ import { dirFor } from "@/lib/i18n/config";
 import { getDict } from "@/lib/i18n/dictionaries";
 import { I18nProvider } from "@/lib/i18n/provider";
 import { getLocale } from "@/lib/i18n/server";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 // Configure Rubik for Latin, Hebrew and Arabic characters
 const rubik = Rubik({
@@ -64,6 +65,7 @@ export default async function RootLayout({
           {children}
         </I18nProvider>
         <ServiceWorkerRegister />
+        <SpeedInsights />
       </body>
     </html>
   );
