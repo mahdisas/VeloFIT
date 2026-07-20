@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Clock, FileText, Loader2, Lock, Phone, RotateCcw, SendHorizontal, Trash2, UserPlus, Users } from "lucide-react";
+import { Clock, FileText, History, Loader2, Phone, RotateCcw, SendHorizontal, Trash2, UserPlus, Users } from "lucide-react";
 
 import {
   deleteSingleSession,
@@ -286,7 +286,7 @@ function Body({
             </span>
             {isPast && (
               <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                <Lock className="size-3" /> {t("Past — view only")}
+                <History className="size-3" /> {t("Past class")}
               </span>
             )}
           </SheetDescription>
@@ -295,13 +295,9 @@ function Body({
 
       {/* Scrollable content */}
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 pb-8 pt-4">
-        {isPast ? (
-          <p className="flex items-center gap-2 rounded-xl border border-dashed bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
-            <Lock className="size-4 shrink-0" /> {t("You can't enroll in a past class.")}
-          </p>
-        ) : (
-          <AddClientBox excludeIds={excludeIds} onPick={handleEnroll} disabled={loading} />
-        )}
+        {/* Enrolling a past class is allowed (back-fill attendance) — the header
+            "Past class" badge is the only difference from a live class. */}
+        <AddClientBox excludeIds={excludeIds} onPick={handleEnroll} disabled={loading} />
 
         {/* Enrolled list */}
         <section className="flex flex-col gap-2">
@@ -316,7 +312,7 @@ function Body({
             </div>
           ) : enrolled.length === 0 ? (
             <p className="rounded-xl border border-dashed px-3 py-6 text-center text-sm text-muted-foreground">
-              {isPast ? t("No enrolled clients.") : t("No one is enrolled yet. Search above to add a client.")}
+              {t("No one is enrolled yet. Search above to add a client.")}
             </p>
           ) : (
             enrolled.map((m) => (
@@ -372,17 +368,15 @@ function Body({
                 <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground line-through" dir="auto">
                   {m.name}
                 </span>
-                {!isPast && (
-                  <button
-                    type="button"
-                    aria-label={t("Approve {name}", { name: m.name })}
-                    onClick={() => handleReinstate(m)}
-                    disabled={rowBusy(m.enrollmentId)}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
-                  >
-                    <RotateCcw className="size-3.5" /> {t("Approve")}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  aria-label={t("Approve {name}", { name: m.name })}
+                  onClick={() => handleReinstate(m)}
+                  disabled={rowBusy(m.enrollmentId)}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-50"
+                >
+                  <RotateCcw className="size-3.5" /> {t("Approve")}
+                </button>
               </div>
             ))
           )}
