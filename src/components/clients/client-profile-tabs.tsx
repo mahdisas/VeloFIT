@@ -363,10 +363,11 @@ function FitnessTab({
     {
       key: "actions",
       header: "",
-      headClassName: "w-20",
+      headClassName: "w-12",
+      // The row itself opens the editor (onRowClick below); Delete must not also
+      // trigger it, so swallow the click here.
       cell: (r) => (
-        <div className="flex items-center justify-end gap-1">
-          <IconBtn label={tr("Edit")} onClick={() => setEditing(r)}><Pencil className="size-4" /></IconBtn>
+        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
           <ConfirmDelete
             label={tr("Delete measurement?")}
             onConfirm={async () => {
@@ -436,6 +437,7 @@ function FitnessTab({
             rows={rows}
             columns={columns}
             maxBodyHeight={500}
+            onRowClick={(r) => setEditing(r)}
             toolbar={
               <div className="flex items-center justify-between">
                 <FormDialog
